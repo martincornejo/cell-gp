@@ -1,4 +1,3 @@
-using Dates
 using CSV
 using DataFrames
 using DataInterpolations
@@ -6,74 +5,160 @@ using DataInterpolations
 using ModelingToolkit
 using DifferentialEquations
 
+# using Stheno
+
 using Optimization
 using OptimizationOptimJL
 import ComponentArrays: ComponentArray
 
-using GLMakie
+# using GLMakie
+using CairoMakie
+CairoMakie.activate!(type="svg")
 
 include("checkup.jl")
-include("ocv.jl")
-include("profiles.jl")
 include("ecm.jl")
 
-## load data
-file = "data/data_lab_raw/1_Capacity/BaSyTec_1_Capacity_Rate_SDI94Ah_Samsung SDI 94Ah_CH01_CH01_2987_11032022.csv"
-cap = reference_capacity(file)
 
-file = "data/data_lab_raw/3_OCV/BaSyTec_Samsung SDI 94Ah_CH01_CH01_3_OCV_SDI94Ah_3029.csv"
-ocv_ch, ocv_dch, ocv = extract_ocv(file)
+#
+function plot_ocvs(files)
+    s = 0:0.001:1.0
+    ylabel = "Voltage in V"
+    xlabel = "SOC in p.u."
+    colormap = :dense
+    colorrange = (0.6, 1.0)
 
-file = "data/data_lab_raw/2_Intraday/BaSyTec2_Intraday_SDI94Ah_2_Samsung SDI 94Ah_CH01_CH01_3015_16032022.csv"
-ti = (1.5, 97.5)
-data = load_profile(file, ti)
+    fig1 = Figure(resolution=(800, 400))
+    ax1 = Axis(fig1[1, 1]; xlabel, ylabel, title="Charge pOCV")
+    ax2 = Axis(fig1[1, 2]; xlabel, title="Discharge pOCV")
+    linkyaxes!(ax1, ax2)
+    hideydecorations!(ax2, ticks=false, grid=false)
 
-tt = 0:60:(24*3600.0)
-df = sample_dataset(data, tt)
+    fig2 = Figure(resolution=(900, 400))
+    ax3 = Axis(fig2[1, 1]; xlabel, ylabel, title="Mean pOCV")
+    ax4 = Axis(fig2[1, 2]; xlabel, title="OCV Hystheresis")
 
-## build ECM
-fi(t) = data.i(t)
-focv(soc) = ocv(soc * cap)
+    for file in files
+        df = read_basytec(file)
 
-@mtkbuild ecm = ECM(; focv, fi)
-ode = ODEProblem(ecm, [ecm.v1 => 0.0, ecm.soc => 0.0], (0.0, 24 * 3600.0), [])
+        # c-cov
+        ocv_c, cap_c = calc_cocv(df)
+        c = s .* cap_c
+        lines!(ax1, s, ocv_c(c); color=cap_c / 4.9, colorrange, colormap)
+
+        # d-ocv
+        ocv_d, cap_d = calc_docv(df)
+        c = s .* cap_d
+        lines!(ax2, s, ocv_d(c); color=cap_d / 4.9, colorrange, colormap)
+
+        # ocv
+        pocv, cap = calc_pocv(df)
+        c = s .* cap
+        lines!(ax3, s, pocv(c); color=cap / 4.9, colorrange, colormap)
+
+        # hyst
+        lines!(ax4, s, pocv(c) - ocv_c(c); color=cap / 4.9, colorrange, colormap)
+    end
+
+    Colorbar(fig1[:, 3]; colorrange, colormap, label="SOH")
+    Colorbar(fig2[:, 3]; colorrange, colormap, label="SOH")
+    return fig1, fig2
+end
 
 
-## fit parameters
-# initial parameters (and boundaries)
-p0 = ComponentArray((;
-    u0=ode.u0,
-    p=ode.p
-))
-# lb = ComponentArray((;
-#     u0=[0.0, 0.0],
-#     p=[75.0, 0.0, 0.0, 0.0]
-# ))
-# ub = ComponentArray((;
-#     u0=[1.0, 0.1],
-#     p=[95.0, 10e-3, 10e-3, 10e3]
-# ))
+# ------
+function main(files)
+    tt = 0:60:(24*3600.0)
+    focv = fresh_focv()
+    res = Dict()
+    for file in files
+        id = get_cell_id(file)
+        @info id
+        df = read_basytec(file)
 
-adtype = Optimization.AutoForwardDiff() # auto-diff framework
-loss = build_loss_function(ode, ecm, df) # loss function
-optf = OptimizationFunction((u, p) -> loss(u), adtype)
-# opt = OptimizationProblem(optf, p0; lb, ub)
-opt = OptimizationProblem(optf, p0)
+        cu = calc_capa_cccv(df) # check-up
+        ecm, ode = fit_ecm(df, tt, focv) # model
+        # ode = fit_ecm(df) # model
 
-opt_sol = solve(opt, LBFGS())
+        res[Symbol(id)] = Dict(:cu => cu, :model => ecm, :ode => ode)
+    end
+    return res
+end
 
-## plot fitted model
-@unpack u0, p = opt_sol.u
-tspan = (0, 3 * 24 * 3600)
-ode_opt = remake(ode; u0, p, tspan)
-sol = solve(ode_opt)
+function plot_ecm_series(res)
+    tspan = (0.0, 3 * 24 * 3600.0)
 
-begin
-    fig = Figure()
-    ax = [Axis(fig[i, 1]) for i in 1:2]
-    lines!(ax[1], sol.t, data.v(sol.t))
-    lines!(ax[1], sol.t, sol[ecm.v])
-    lines!(ax[2], sol.t, sol[ecm.v] - data.v(sol.t))
+    fig = Figure(resolution=(1200, 600))
+    ax = [Axis(fig[i, 1]) for i in 1:3]
+    ax[1].title = "Measured"
+    ax[2].title = "Simulated"
+    ax[3].title = "Error"
+
+    linkxaxes!(ax...)
+
+    xlims!(ax[1], tspan)
+    xlims!(ax[2], tspan)
+    xlims!(ax[3], tspan)
+    ax[1].ylabel = "Voltage (V)"
+    ax[2].ylabel = "Voltage (V)"
+    ax[3].ylabel = "Voltage (V)"
+    ax[3].xlabel = "Time (s)"
+
+    hidexdecorations!(ax[1])
+    hidexdecorations!(ax[2])
+
+    colormap = :dense
+    colorrange = (0.6, 1.0)
+
+    for file in files
+        id = get_cell_id(file)
+
+        df_cell = read_basytec(file)
+        data = load_profile(df_cell)
+
+        cap = prob = res[Symbol(id)][:cu]
+        soh = cap / 4.9
+
+        prob = res[Symbol(id)][:ode]
+        ecm = res[Symbol(id)][:model]
+        new_prob = remake(prob; tspan)
+        sol = solve(new_prob)
+
+        δv = sol[ecm.v] - data.v(sol.t)
+
+        lines!(ax[1], sol.t, data.v(sol.t); label=id, color=soh, colorrange, colormap)
+        lines!(ax[2], sol.t, sol[ecm.v]; label=id, color=soh, colorrange, colormap)
+        lines!(ax[3], sol.t, δv; label=id, color=soh, colorrange, colormap)
+
+        l2 = sum(abs2, δv)
+
+        @info id soh l2
+    end
+
+    Colorbar(fig[:, 2]; colorrange, colormap, label="SOH")
+
     fig
 end
 
+files = readdir("data/check-ups/", join=true)
+
+# ocvs
+fig1, fig2 = plot_ocvs(files)
+fig1 |> save("figs/ocv1.svg")
+fig2 |> save("figs/ocv2.svg")
+
+# ECM
+res = main(files)
+
+for key in keys(res)
+    estimated = res[key][:ode].p[1] / 4.9
+    measured = res[key][:cu] / 4.9
+    e = (estimated - measured) * 100
+    @info key estimated measured e
+end
+
+fig = plot_ecm_series(res)
+
+save("figs/ecm2.png", fig, px_per_unit=2)
+
+
+save("figs/ecm.svg", fig)
