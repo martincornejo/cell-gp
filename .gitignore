@@ -1,2 +1,9 @@
+# editor
 .vscode/
+
+# project
 data/
+extra/
+
+# for now ignore the figures
+figs/
