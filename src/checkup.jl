@@ -27,6 +27,15 @@ function get_cell_id(file)
     return match_result |> first
 end
 
+function load_data(files)
+    data = Dict{Symbol,DataFrame}()
+    for file in files
+        id = get_cell_id(file) |> Symbol
+        df = read_basytec(file)
+        data[id] = df
+    end
+    return data
+end
 
 ## capacity
 function calc_capa_cccv(df; line=(21, 22))
@@ -140,30 +149,28 @@ end
 
 
 ## plots
-function plot_checkup_profile(file)
-    df = read_basytec(file)
-
-    # fig = Figure(size=(1200, 400))
-    # fig = Figure(size=(900, 300))
+function plot_checkup_profile(df)
     fig = Figure(size=(600, 200), fontsize=11, figure_padding=5)
     gl = GridLayout(fig[1, 1])
-    # fig = Figure(size=(515, 172), fontsize=11)
     ax1 = Axis(gl[1, 1])
     ax2 = Axis(gl[2, 1])
-    n = nrow(df)
-    lines!(ax1, df[1:60:n, "Time[h]"], df[1:60:n, "U[V]"], color=Cycled(1))
-    lines!(ax2, df[1:60:n, "Time[h]"], df[1:60:n, "I[A]"], color=Cycled(2))
+
+    t = 1:60:size(df, 1) # 1 sample per minute
+    lines!(ax1, df[t, "Time[h]"], df[t, "U[V]"], color=Cycled(1))
+    lines!(ax2, df[t, "Time[h]"], df[t, "I[A]"], color=Cycled(2))
     xlims!(ax1, (df[begin, "Time[h]"], df[end, "Time[h]"]))
     xlims!(ax2, (df[begin, "Time[h]"], df[end, "Time[h]"]))
+
     ax1.ylabel = "Voltage (V)"
     ax2.ylabel = "Current (A)"
     ax2.xlabel = "Time (h)"
+
     hidexdecorations!(ax1, grid=false, ticks=false)
     rowgap!(gl, 5)
     fig
 end
 
-function plot_ocvs(files)
+function plot_ocvs(data)
     s = 0:0.001:1.0
     colormap = :dense
     colorrange = (0.6, 1.0)
@@ -180,14 +187,12 @@ function plot_ocvs(files)
     # ax2 = Axis(fig[2, 1]; xlabel="SOC", ylabel="δV (mV)")
     # Colorbar(fig[:, 2]; colorrange, colormap, label="SOH") #, vertical=false, flipaxis=false)
 
-    s2 = 0.5:0.001:1.0
+    # s2 = 0.5:0.001:1.0
     # ax3 = Axis(fig, bbox = BBox(350, 475, 290, 370))
 
     focv = fresh_focv()
 
-    for file in files
-        df = read_basytec(file)
-
+    for (id, df) in data
         # mean ocv
         pocv, cap = calc_pocv(df)
         c = s .* cap
@@ -197,8 +202,7 @@ function plot_ocvs(files)
         # lines!(ax3, s2, pocv(c2); color=cap / 4.9, colorrange, colormap)
 
         # degradation
-        # if !occursin("LGL13818", file)
-        if !occursin("LGL09107", file)
+        if id != :LGL09107 # :LGL13818
             δv = (pocv(c) - focv(s)) * 1e3 # mV
             lines!(ax2, s, δv; color=cap / 4.9, colorrange, colormap)
         end
@@ -208,7 +212,7 @@ function plot_ocvs(files)
     return fig
 end
 
-function plot_rints(files; timestep=1)
+function plot_rints(data; timestep=1)
     soc = 0.9:-0.1:0.1
     colormap = :dense
     colorrange = (0.6, 1.0)
@@ -217,9 +221,7 @@ function plot_rints(files; timestep=1)
     ax = Axis(fig[1, 1]; xlabel="SOC", ylabel="Resistance (mΩ)")
     Colorbar(fig[1, 2]; colorrange, colormap, label="SOH")
 
-    for file in files
-        # id = Symbol(get_cell_id(file))
-        df = read_basytec(file)
+    for (id, df) in data
         soh = calc_capa_cc(df) / 4.9
         r = calc_rint(df; timestep) * 1e3 # mΩ
 

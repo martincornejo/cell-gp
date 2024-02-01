@@ -24,36 +24,31 @@ include("gp.jl")
 
 # ------
 files = readdir("data/check-ups/", join=true)
+data = load_data(files)
 
-fig = plot_checkup_profile(files[end]) # fresh cell
+fig = plot_checkup_profile(data[:LGL13818]) # fresh cell
 save("figs/measurement-plan.pdf", fig, pt_per_unit=1)
 
-fig = plot_ocvs(files)
+fig = plot_ocvs(data)
 save("figs/pOCV.pdf", fig, pt_per_unit=1)
 
-fig = plot_rints(files; timestep=9.99)
+fig = plot_rints(data; timestep=9.99)
 save("figs/rint.pdf", fig, pt_per_unit=1)
 
 # ------
-function fit_ecm_series(files)
+function fit_ecm_series(data)
     tt = 0:60:(24*3600.0)
     focv = fresh_focv()
     res = Dict()
-    for file in files
-        id = get_cell_id(file)
-        @info id
-        df = read_basytec(file)
-
+    for (id, df) in data
         cu = calc_capa_cccv(df) # check-up
         ecm, ode = fit_ecm(df, tt, focv) # model
-        # ode = fit_ecm(df) # model
-
-        res[Symbol(id)] = Dict(:cu => cu, :model => ecm, :ode => ode)
+        res[id] = Dict(:cu => cu, :model => ecm, :ode => ode)
     end
     return res
 end
 
-function plot_ecm_series(res)
+function plot_ecm_series(res, data)
     tspan = (0.0, 3 * 24 * 3600.0)
 
     fig = Figure(size=(1200, 600))
@@ -81,24 +76,23 @@ function plot_ecm_series(res)
     colormap = :dense
     colorrange = (0.6, 1.0)
 
-    for file in files
-        id = get_cell_id(file)
+    for (id, df_cell) in data
+        profile = load_profile(df_cell)
 
-        df_cell = read_basytec(file)
-        data = load_profile(df_cell)
-
-        cap = res[Symbol(id)][:cu]
+        cap = res[id][:cu]
         soh = cap / 4.9
 
-        prob = res[Symbol(id)][:ode]
-        ecm = res[Symbol(id)][:model]
+        prob = res[id][:ode]
+        ecm = res[id][:model]
         new_prob = remake(prob; tspan)
         sol = solve(new_prob; saveat=60)
 
-        δv = sol[ecm.v] - data.v(sol.t)
+        v = sol[ecm.v]
+        v̄ = profile.v(sol.t)
+        δv = v - v̄
 
-        lines!(ax[1], sol.t, data.v(sol.t); label=id, color=soh, colorrange, colormap)
-        lines!(ax[2], sol.t, sol[ecm.v]; label=id, color=soh, colorrange, colormap)
+        lines!(ax[1], sol.t, v̄; label=id, color=soh, colorrange, colormap)
+        lines!(ax[2], sol.t, v; label=id, color=soh, colorrange, colormap)
         lines!(ax[3], sol.t, δv; label=id, color=soh, colorrange, colormap)
 
         l2 = sum(abs2, δv)
@@ -111,14 +105,9 @@ function plot_ecm_series(res)
     fig
 end
 
-# ocvs
-fig1, fig2, fig3 = plot_ocvs(files)
-fig1 |> save("figs/ocv1.svg") # charge/discharge ocv
-fig2 |> save("figs/ocv2.svg") # mean ocv + hystheresis
-fig3 |> save("figs/ocv3.svg") # mean ocv + degradation
 
 # ECM
-res = fit_ecm_series(files)
+res = fit_ecm_series(data)
 
 for key in keys(res)
     estimated = res[key][:ode].p[1] / 4.9
@@ -127,10 +116,8 @@ for key in keys(res)
     @info key estimated measured e
 end
 
-fig = plot_ecm_series(res)
-
-fig |> save("figs/ecm.svg")
-
+fig = plot_ecm_series(res, data)
+fig |> save("figs/ecm.pdf")
 
 
 ### GP
@@ -145,7 +132,7 @@ function model(θ)
     end
 end
 
-function fit_gp_series(files)
+function fit_gp_series(data)
     tt = 0:60:(24*3600.0)
 
     # # GP hyperparams
@@ -158,12 +145,10 @@ function fit_gp_series(files)
         noise=2.8383204772342602e-5
     )
     res = Dict()
-    for file in files
+    for (id, df) in data
         # load data
-        id = get_cell_id(file)
-        df = read_basytec(file)
-        data = load_profile(df)
-        df_train = sample_dataset(data, tt)
+        profile = load_profile(df)
+        df_train = sample_dataset(profile, tt)
 
         cu = calc_capa_cccv(df) # check-up
 
@@ -175,7 +160,7 @@ function fit_gp_series(files)
     return res
 end
 
-function plot_gp_series(res)
+function plot_gp_series(data, res)
     tt = 0.0:60.0:(3*24*3600.0)
     tspan = (tt[begin], tt[end])
 
@@ -204,20 +189,18 @@ function plot_gp_series(res)
     colormap = :dense
     colorrange = (0.6, 1.0)
 
-    for file in files # TODO: fix this (files should be an input?)
-        id = get_cell_id(file)
+    for (id, df_cell) in data
 
-        df_cell = read_basytec(file)
-        data = load_profile(df_cell)
-        df_test = sample_dataset(data, tt)
+        profile = load_profile(df_cell)
+        df_test = sample_dataset(profile, tt)
 
-        cap = res[Symbol(id)][:cu]
+        cap = res[id][:cu]
         soh = cap / 4.9
 
-        gp = res[Symbol(id)][:gp]
+        gp = res[id][:gp]
         vμ, vσ = simulate_gp(gp, df_test)
 
-        v̄ = data.v(df_test.t)
+        v̄ = profile.v(df_test.t)
         δv = vμ - v̄
 
         lines!(ax[1], df_test.t, v̄; label=id, color=soh, colorrange, colormap)
@@ -234,18 +217,16 @@ function plot_gp_series(res)
     fig
 end
 
-res_gp = fit_gp_series(files)
-fig = plot_gp_series(res_gp)
+res_gp = fit_gp_series(data)
+fig = plot_gp_series(data, res_gp)
 save("figs/gp-ecm.svg", fig)
 
 
 ###
-function plot_gp_ocv!(res, file)
-    id = get_cell_id(file)
-    df = read_basytec(file)
-    data = load_profile(df)
+function plot_gp_ocv!(res, id, df)
+    profile = load_profile(df)
     tt = 0:60:(24*2600)
-    df_train = sample_dataset(data, tt)
+    df_train = sample_dataset(profile, tt)
 
     focv, cap = calc_pocv(df)
 
@@ -291,17 +272,15 @@ function plot_gp_ocv!(res, file)
     return fig
 end
 
-function plot_gp_ecm(res, file)
-    id = get_cell_id(file)
-    df = read_basytec(file)
-    data = load_profile(df)
+function plot_gp_ecm(res, id, df)
+    profile = load_profile(df)
     tt = 0:60:(24*2600)
-    df_train = sample_dataset(data, tt)
+    df_train = sample_dataset(profile, tt)
 
     focv, cap = calc_pocv(df)
 
-    soh = res[Symbol(id)][:cu] / 4.9
-    gp, dt = res[Symbol(id)][:gp]
+    soh = res[id][:cu] / 4.9
+    gp, dt = res[id][:gp]
 
     e = [extrema(df_train.s)...]
     vl = (e ./ 4.9) .+ 0.385
@@ -387,9 +366,9 @@ function plot_gp_ocv_series(files)
         df = read_basytec(file)
         focv, cap = calc_pocv(df)
 
-        data = load_profile(df)
+        profile = load_profile(df)
         tt = 0:60:(24*3600)
-        df_train = sample_dataset(data, tt)
+        df_train = sample_dataset(profile, tt)
 
         ŝ = df_train.s / 4.9
         î = df_train.i ./ 4.9
@@ -508,8 +487,8 @@ function fit_gp_rc_series(files)
 
         cu = calc_capa_cccv(df) # check-up
 
-        data = load_profile(df)
-        df_train = sample_dataset(data, tt)
+        profile = load_profile(df)
+        df_train = sample_dataset(profile, tt)
 
         s = df_train.s / 4.9
         i = df_train.i ./ 4.9
@@ -518,7 +497,7 @@ function fit_gp_rc_series(files)
         fp = model(θ.kernel)
         fx = fp(x, θ.noise)
 
-        fi = t -> data.i(t)
+        fi = t -> profile.i(t)
         @mtkbuild rc = RC(; fi)
         tspan = (tt[begin], tt[end])
         ode = ODEProblem(rc, [rc.v1 => 0.0], tspan, [])
@@ -581,10 +560,10 @@ function plot_gp_rc_series(files)
         pocv, cap = calc_pocv(df)
         soh = cap / 4.9
 
-        data = load_profile(df)
+        profile = load_profile(df)
 
         tt = 0:60:(3*24*3600)
-        df_test = sample_dataset(data, tt)
+        df_test = sample_dataset(profile, tt)
 
         # rc
         ode = res[id][:ode]
@@ -637,12 +616,12 @@ begin
     for file in files
 
         df_cell = read_basytec(file)
-        data = load_profile(df_cell)
+        profile = load_profile(df_cell)
         cap = calc_capa_cccv(df_cell)
         soh = cap / 4.9
         tt = 0.0:60.0:(24*3600.0)
 
-        df = sample_dataset(data, tt)
+        df = sample_dataset(profile, tt)
 
         lines!(ax[1], df.t, df.v; color=soh, colorrange, colormap)
         lines!(ax[2], df.t, df.i; color=soh, colorrange, colormap)
