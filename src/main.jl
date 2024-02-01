@@ -26,11 +26,13 @@ include("gp.jl")
 files = readdir("data/check-ups/", join=true)
 
 fig = plot_checkup_profile(files[end]) # fresh cell
-# save("figs/measurement-plan-2.pdf", fig, pt_per_unit=1)
-# fig |> save("figs/measurement-plan-2.pdf")
+save("figs/measurement-plan.pdf", fig, pt_per_unit=1)
 
 fig = plot_ocvs(files)
+save("figs/pOCV.pdf", fig, pt_per_unit=1)
 
+fig = plot_rints(files; timestep=9.99)
+save("figs/rint.pdf", fig, pt_per_unit=1)
 
 # ------
 function fit_ecm_series(files)

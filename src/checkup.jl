@@ -74,11 +74,43 @@ function calc_pocv(df)
 end
 
 function fresh_focv()
-    file = "data/check-ups/2098LG_INR21700-M50L_SammyLGL13818NewFullCU.txt"
+    # file = "data/check-ups/2098LG_INR21700-M50L_SammyLGL13818NewFullCU.txt"
+    file = "data/check-ups/2097LG_INR21700-M50L_SammyLGL09107NewFullCU.txt"
     df = read_basytec(file)
     ocv, cap = calc_pocv(df)
     focv = soc -> ocv(soc * cap)
     return focv
+end
+
+## internal resistance
+function calc_rint(df; timestep=1)
+    cycles = 9
+    timestep = timestep / 3600 # seconds
+
+    line = 49 # 51
+    i = 4.8 * 0.3
+
+    # line = 53 # 55
+    # i = 4.8 * 2 // 3
+
+    resistances = Float64[]
+    for cycle in 1:cycles
+        # initial_voltage
+        df2 = copy(df)
+        filter!(:Line => ∈(line), df2)
+        filter!(:Count => ==(cycle), df2)
+        # idx = isapprox.(df2[:, "I[A]"], 0.0, atol=1e-3) |> findfirst
+        # @show idx
+        init_time = df2[begin, "Time[h]"]
+        init_voltage = df2[begin, "U[V]"]
+
+        idx2 = findfirst(>(init_time + timestep), df[:, "Time[h]"])
+        voltage = df[idx2, "U[V]"]
+
+        r = abs(voltage - init_voltage) / i
+        append!(resistances, r)
+    end
+    return resistances
 end
 
 
@@ -114,7 +146,7 @@ function plot_checkup_profile(file)
     # fig = Figure(size=(1200, 400))
     # fig = Figure(size=(900, 300))
     fig = Figure(size=(600, 200), fontsize=11, figure_padding=5)
-    gl = GridLayout(fig[1,1])
+    gl = GridLayout(fig[1, 1])
     # fig = Figure(size=(515, 172), fontsize=11)
     ax1 = Axis(gl[1, 1])
     ax2 = Axis(gl[2, 1])
@@ -133,58 +165,72 @@ end
 
 function plot_ocvs(files)
     s = 0:0.001:1.0
-    ylabel = "Voltage in V"
-    xlabel = "SOC in p.u."
     colormap = :dense
     colorrange = (0.6, 1.0)
 
-    fig1 = Figure(size=(800, 400))
-    ax1 = Axis(fig1[1, 1]; xlabel, ylabel, title="Charge pOCV")
-    ax2 = Axis(fig1[1, 2]; xlabel, title="Discharge pOCV")
-    linkyaxes!(ax1, ax2)
-    hideydecorations!(ax2, ticks=false, grid=false)
+    fig = Figure(size=(350, 400), fontsize=11, figure_padding=7)
+    gl = GridLayout(fig[1, 1])
 
-    fig2 = Figure(size=(900, 400))
-    ax3 = Axis(fig2[1, 1]; xlabel, ylabel, title="Mean pOCV")
-    ax4 = Axis(fig2[1, 2]; xlabel, title="OCV Hystheresis")
+    Colorbar(gl[1, 1]; colorrange, colormap, label="SOH", vertical=false) #, flipaxis=false)
+    ax1 = Axis(gl[2, 1]; ylabel="OCV (V)") # mean pOCV
+    ax2 = Axis(gl[3, 1]; xlabel="SOC", ylabel="δV (mV)")
+    rowgap!(gl, 6)
 
-    fig3 = Figure(size=(900, 400))
-    ax5 = Axis(fig3[1, 1]; xlabel, ylabel, title="Mean pOCV")
-    ax6 = Axis(fig3[1, 2]; xlabel, title="Deviation")
+    # ax1 = Axis(fig[1, 1]; ylabel="OCV (V)") # mean pOCV
+    # ax2 = Axis(fig[2, 1]; xlabel="SOC", ylabel="δV (mV)")
+    # Colorbar(fig[:, 2]; colorrange, colormap, label="SOH") #, vertical=false, flipaxis=false)
+
+    s2 = 0.5:0.001:1.0
+    # ax3 = Axis(fig, bbox = BBox(350, 475, 290, 370))
 
     focv = fresh_focv()
 
     for file in files
         df = read_basytec(file)
 
-        # charge ocv
-        ocv_c, cap_c = calc_cocv(df)
-        c = s .* cap_c
-        lines!(ax1, s, ocv_c(c); color=cap_c / 4.9, colorrange, colormap)
-
-        # discharge ocv
-        ocv_d, cap_d = calc_docv(df)
-        c = s .* cap_d
-        lines!(ax2, s, ocv_d(c); color=cap_d / 4.9, colorrange, colormap)
-
         # mean ocv
         pocv, cap = calc_pocv(df)
         c = s .* cap
-        lines!(ax3, s, pocv(c); color=cap / 4.9, colorrange, colormap)
-        lines!(ax5, s, pocv(c); color=cap / 4.9, colorrange, colormap)
+        lines!(ax1, s, pocv(c); color=cap / 4.9, colorrange, colormap)
 
-        # hyst
-        lines!(ax4, s, pocv(c) - ocv_c(c); color=cap / 4.9, colorrange, colormap)
+        # c2 = s2 .* cap
+        # lines!(ax3, s2, pocv(c2); color=cap / 4.9, colorrange, colormap)
 
         # degradation
-        if !occursin("LGL13818", file)
-            lines!(ax6, s, pocv(c) - focv(s); color=cap / 4.9, colorrange, colormap)
+        # if !occursin("LGL13818", file)
+        if !occursin("LGL09107", file)
+            δv = (pocv(c) - focv(s)) * 1e3 # mV
+            lines!(ax2, s, δv; color=cap / 4.9, colorrange, colormap)
         end
     end
 
-    Colorbar(fig1[:, 3]; colorrange, colormap, label="SOH")
-    Colorbar(fig2[:, 3]; colorrange, colormap, label="SOH")
-    Colorbar(fig3[:, 3]; colorrange, colormap, label="SOH")
-    return fig1, fig2, fig3
+    hidexdecorations!(ax1, grid=false, ticks=false)
+    return fig
 end
+
+function plot_rints(files; timestep=1)
+    soc = 0.9:-0.1:0.1
+    colormap = :dense
+    colorrange = (0.6, 1.0)
+
+    fig = Figure(size=(359, 350), fontsize=11)
+    ax = Axis(fig[1, 1]; xlabel="SOC", ylabel="Resistance (mΩ)")
+    Colorbar(fig[1, 2]; colorrange, colormap, label="SOH")
+
+    for file in files
+        # id = Symbol(get_cell_id(file))
+        df = read_basytec(file)
+        soh = calc_capa_cc(df) / 4.9
+        r = calc_rint(df; timestep) * 1e3 # mΩ
+
+        scatter!(ax, soc, r; color=soh, colorrange, colormap)
+    end
+
+    return fig
+end
+
+fig = plot_ocvs(files)
+
+
+save("figs/pOCV.pdf", fig, pt_per_unit=1)
 
