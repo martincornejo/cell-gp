@@ -1,4 +1,4 @@
-## 
+## load dataset
 function read_basytec(file; kwargs...)
     columns = [
         "Time[h]",
@@ -20,7 +20,6 @@ function read_basytec(file; kwargs...)
     return CSV.File(file; header=columns, delim='\t', comment="~", kwargs...) |> DataFrame
 end
 
-## cell id
 function get_cell_id(file)
     pattern = r"(MF\d+|LGL\d+)"
     match_result = match(pattern, file)
@@ -62,7 +61,7 @@ function calc_cocv(df)
     cap = dfc[end, "Ah-Step"] |> abs
     v = dfc[:, "U[V]"]
     s = dfc[:, "Ah-Step"]
-    return LinearInterpolation(v, s), cap
+    return LinearInterpolation(v, s; extrapolate=true), cap
 end
 
 function calc_docv(df)
@@ -70,7 +69,7 @@ function calc_docv(df)
     cap = dfc[end, "Ah-Step"] |> abs
     v = reverse(dfc[:, "U[V]"])
     s = reverse(dfc[:, "Ah-Step"] .+ cap)
-    return LinearInterpolation(v, s), cap
+    return LinearInterpolation(v, s; extrapolate=true), cap
 end
 
 function calc_pocv(df)
@@ -83,8 +82,8 @@ function calc_pocv(df)
 end
 
 function fresh_focv()
-    # file = "data/check-ups/2098LG_INR21700-M50L_SammyLGL13818NewFullCU.txt"
-    file = "data/check-ups/2097LG_INR21700-M50L_SammyLGL09107NewFullCU.txt"
+    file = "data/check-ups/2098LG_INR21700-M50L_SammyLGL13818NewFullCU.txt"
+    # file = "data/check-ups/2097LG_INR21700-M50L_SammyLGL09107NewFullCU.txt"
     df = read_basytec(file)
     ocv, cap = calc_pocv(df)
     focv = soc -> ocv(soc * cap)
@@ -152,18 +151,17 @@ end
 function plot_checkup_profile(df)
     fig = Figure(size=(600, 200), fontsize=11, figure_padding=5)
     gl = GridLayout(fig[1, 1])
-    ax1 = Axis(gl[1, 1])
-    ax2 = Axis(gl[2, 1])
+    ax1 = Axis(gl[1, 1]; ylabel="Voltage (V)")
+    ax2 = Axis(gl[2, 1]; ylabel="Current (A)", xlabel="Time (h)")
 
-    t = 1:60:size(df, 1) # 1 sample per minute
-    lines!(ax1, df[t, "Time[h]"], df[t, "U[V]"], color=Cycled(1))
-    lines!(ax2, df[t, "Time[h]"], df[t, "I[A]"], color=Cycled(2))
+    lines!(ax1, df[:, "Time[h]"], df[:, "U[V]"], color=Cycled(1))
+    lines!(ax2, df[:, "Time[h]"], df[:, "I[A]"], color=Cycled(2))
     xlims!(ax1, (df[begin, "Time[h]"], df[end, "Time[h]"]))
     xlims!(ax2, (df[begin, "Time[h]"], df[end, "Time[h]"]))
 
-    ax1.ylabel = "Voltage (V)"
-    ax2.ylabel = "Current (A)"
-    ax2.xlabel = "Time (h)"
+    idx = [findfirst(df[:, "Line"] .== line) for line in (25, 35, 36, 47)]
+    vlines!(ax1, df[idx, "Time[h]"], color=:gray, linestyle=:dashdot)
+    vlines!(ax2, df[idx, "Time[h]"], color=:gray, linestyle=:dashdot)
 
     hidexdecorations!(ax1, grid=false, ticks=false)
     rowgap!(gl, 5)
@@ -230,9 +228,3 @@ function plot_rints(data; timestep=1)
 
     return fig
 end
-
-fig = plot_ocvs(files)
-
-
-save("figs/pOCV.pdf", fig, pt_per_unit=1)
-

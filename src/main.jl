@@ -6,6 +6,7 @@ using StatsBase
 using ModelingToolkit
 using DifferentialEquations
 
+using Optim
 using Optimization
 using OptimizationOptimJL
 import ComponentArrays: ComponentArray
@@ -14,9 +15,8 @@ using Stheno
 using ParameterHandling
 using Zygote
 
-# using GLMakie
-using CairoMakie
-# CairoMakie.activate!(type="svg")
+using GLMakie
+# using CairoMakie
 
 include("checkup.jl")
 include("ecm.jl")
@@ -27,21 +27,22 @@ files = readdir("data/check-ups/", join=true)
 data = load_data(files)
 
 fig = plot_checkup_profile(data[:LGL13818]) # fresh cell
-save("figs/measurement-plan.pdf", fig, pt_per_unit=1)
+# save("figs/measurement-plan.pdf", fig, pt_per_unit=1)
 
 fig = plot_ocvs(data)
-save("figs/pOCV.pdf", fig, pt_per_unit=1)
+# save("figs/pOCV.pdf", fig, pt_per_unit=1)
 
 fig = plot_rints(data; timestep=9.99)
-save("figs/rint.pdf", fig, pt_per_unit=1)
+# save("figs/rint.pdf", fig, pt_per_unit=1)
 
 # ------
 function fit_ecm_series(data)
-    tt = 0:60:(24*3600.0)
+    tt = 0:(24*3600.0)
     focv = fresh_focv()
     res = Dict()
     for (id, df) in data
         cu = calc_capa_cccv(df) # check-up
+        @info id cu
         ecm, ode = fit_ecm(df, tt, focv) # model
         res[id] = Dict(:cu => cu, :model => ecm, :ode => ode)
     end
@@ -59,16 +60,16 @@ function plot_ecm_series(res, data)
 
     linkxaxes!(ax...)
 
-    xlims!(ax[1], tspan)
-    xlims!(ax[2], tspan)
-    xlims!(ax[3], tspan)
+    xlims!(ax[1], tspan ./ 3600)
+    xlims!(ax[2], tspan ./ 3600)
+    xlims!(ax[3], tspan ./ 3600)
     ylims!(ax[1], (3.3, 4.1))
     ylims!(ax[2], (3.3, 4.1))
     ylims!(ax[3], (-0.15, 0.15))
     ax[1].ylabel = "Voltage (V)"
     ax[2].ylabel = "Voltage (V)"
     ax[3].ylabel = "Voltage (V)"
-    ax[3].xlabel = "Time (s)"
+    ax[3].xlabel = "Time (h)"
 
     hidexdecorations!(ax[1])
     hidexdecorations!(ax[2])
@@ -76,8 +77,9 @@ function plot_ecm_series(res, data)
     colormap = :dense
     colorrange = (0.6, 1.0)
 
-    for (id, df_cell) in data
-        profile = load_profile(df_cell)
+    ids = collect(keys(res))[sortperm([x[:cu] for x in values(res)])]
+    for id in ids
+        profile = load_profile(data[id])
 
         cap = res[id][:cu]
         soh = cap / 4.9
@@ -91,15 +93,17 @@ function plot_ecm_series(res, data)
         v̄ = profile.v(sol.t)
         δv = v - v̄
 
-        lines!(ax[1], sol.t, v̄; label=id, color=soh, colorrange, colormap)
-        lines!(ax[2], sol.t, v; label=id, color=soh, colorrange, colormap)
-        lines!(ax[3], sol.t, δv; label=id, color=soh, colorrange, colormap)
+        t = sol.t / 3600
+        lines!(ax[1], t, v̄; label=id, color=soh, colorrange, colormap)
+        lines!(ax[2], t, v; label=id, color=soh, colorrange, colormap)
+        lines!(ax[3], t, δv; label=id, color=soh, colorrange, colormap)
 
         l2 = sum(abs2, δv)
 
         @info id soh l2
     end
 
+    linkxaxes!(ax...)
     Colorbar(fig[:, 2]; colorrange, colormap, label="SOH")
 
     fig
@@ -107,17 +111,76 @@ end
 
 
 # ECM
-res = fit_ecm_series(data)
 
-for key in keys(res)
-    estimated = res[key][:ode].p[1] / 4.9
-    measured = res[key][:cu] / 4.9
-    e = (estimated - measured) * 100
-    @info key estimated measured e
+
+function ecm_fit_analysis(data, res)
+    id = Symbol[]
+    soh_estimated = Float64[]
+    soh_measured = Float64[]
+    soh_error = Float64[]
+    sim_error = Float64[]
+
+    for (id_cell, df_cell) in data
+        profile = load_profile(df_cell)
+
+        prob = res[id_cell][:ode]
+        ecm = res[id_cell][:model]
+        sol = solve(prob; saveat=60)
+
+        v = sol[ecm.v]
+        v̄ = profile.v(sol.t)
+        δv = v - v̄
+        l2 = sum(abs2, δv)
+
+        soh_cc = calc_capa_cc(df_cell) / 4.9
+        soh_cccv = calc_capa_cccv(df_cell) / 4.9
+        soh_ecm = prob.p[1] / 4.9
+
+        push!(id, id_cell)
+        push!(soh_estimated, soh_ecm)
+        push!(soh_measured, soh_cc)
+        push!(soh_error, soh_cc - soh_ecm)
+        push!(sim_error, l2)
+    end
+    return sort(DataFrame(; id, soh_estimated, soh_measured, soh_error, sim_error), :soh_measured)
 end
 
+function q_r_plot(data, res)
+    r0 = Float64[]
+    soh = Float64[]
+    for (id, df) in data
+        push!(soh, calc_capa_cc(df) / 4.9)
+        push!(r0, res[id][:ode].p[4])
+    end
+    scatter(soh, r0)
+end
+
+function simulate_pulse(ode, focv; i=2.867, soc=0.5, Δt=10)
+    fi2(t) = i # constant current pulse
+    @mtkbuild ecm = ECM(; focv, fi=fi2)
+    tspan = (0, Δt)
+    prob = ODEProblem(ecm, [ecm.v1 => 0.0, ecm.soc => soc], tspan)
+    prob = remake(prob; p=ode.p)
+    sol = solve(prob)
+    Δv = abs(sol[ecm.vr][end] + sol[ecm.v1][end])
+    return Δv / i
+end
+
+for key in keys(res)
+    ode = res[key][:ode]
+    ecm = res[key][:model]
+    r_sim = simulate_pulse(ode, focv)
+    df = data[key]
+    r_meas = calc_rint(df; timestep=9.99)[5]
+    r_error = (r_sim - r_meas) / r_meas * 100
+    @info key r_sim r_meas r_error
+end
+
+res = fit_ecm_series(data)
+ecm_fit_analysis(data, res)
+
 fig = plot_ecm_series(res, data)
-fig |> save("figs/ecm.pdf")
+# fig |> save("figs/ecm.pdf")
 
 
 ### GP
