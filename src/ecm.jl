@@ -81,7 +81,7 @@ function fit_ecm(df, tt, focv) # input only data instead?
     opt_sol = argmin(sol -> sol.objective, solutions)
 
     @unpack u0, p = opt_sol.u
-    ode_opt = remake(ode; u0, p, tspan)
+    ode = remake(ode; u0, p, tspan)
 
-    return ecm, ode_opt
+    return (; ecm, ode)
 end
