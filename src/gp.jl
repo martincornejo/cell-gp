@@ -1,22 +1,20 @@
 
 ## data pre-processing
 function fit_zscore(df)
-    # v = StatsBase.fit(ZScoreTransform, df.v)
-    # σ = StatsBase.fit(ZScoreTransform, df.v, center=false)
-    # i = StatsBase.fit(ZScoreTransform, df.i, center=false)
-    # s = StatsBase.fit(ZScoreTransform, df.s, center=false)
-    v = ZScoreTransform(1, 1, [3.7], [1.0])
-    σ = ZScoreTransform(1, 1, Float64[], [1.0])
-    i = ZScoreTransform(1, 1, Float64[], [4.9])
-    s = ZScoreTransform(1, 1, Float64[], [4.9])
-    return (; v, σ, i, s)
+    v = StatsBase.fit(ZScoreTransform, df.v)
+    σ = StatsBase.fit(ZScoreTransform, df.v, center=false)
+    i = StatsBase.fit(ZScoreTransform, df.i, center=false)
+    s = StatsBase.fit(ZScoreTransform, df.s)
+    T = StatsBase.fit(ZScoreTransform, df.T)
+    return (; v, σ, i, s, T)
 end
 
 function normalize_data(df, dt)
     v̂ = StatsBase.transform(dt.v, df.v)
     î = StatsBase.transform(dt.i, df.i)
     ŝ = StatsBase.transform(dt.s, df.s)
-    return DataFrame(; df.t, v̂, î, ŝ)
+    T̂ = StatsBase.transform(dt.s, df.s)
+    return DataFrame(; df.t, v̂, î, ŝ, T̂)
 end
 
 ## GP model
@@ -42,42 +40,41 @@ function fit_gp_hyperparams(model, θ, df)
     f = OptimizationFunction((u, p) -> loss_packed(u), adtype)
     prob = OptimizationProblem(f, θ0)
 
-    sol = solve(prob, LBFGS(); show_trace=true)
+    sol = solve(prob, LBFGS(); reltol=1e-3)
     θ_opt = unflatten(sol.u)
 
     return θ_opt
 end
 
-function build_gp(model, θ, df, dt)
-    # normalize data
-    # dt = fit_zscore(df)
-    dfs = normalize_data(df, dt)
-    x = GPPPInput(:v, RowVecs([dfs.ŝ dfs.î]))
-    y = dfs.v̂
+# function build_gp(model, θ, df, dt)
+#     # normalize data
+#     dfs = normalize_data(df, dt)
+#     x = GPPPInput(:v, RowVecs([dfs.ŝ dfs.î]))
+#     y = dfs.v̂
 
-    # build gp
-    fp = model(θ.kernel)
-    fx = fp(x, θ.noise)
-    gp = posterior(fx, y)
-    return gp, dt
-end
+#     # build gp
+#     fp = model(θ.kernel)
+#     fx = fp(x, θ.noise)
+#     gp = posterior(fx, y)
+#     return gp, dt
+# end
 
-function simulate_gp(gp_model, df)
-    # normalize data
-    gp, dt = gp_model
-    dfs = normalize_data(df, dt)
-    x = GPPPInput(:v, RowVecs([dfs.ŝ dfs.î]))
+# function simulate_gp(gp_model, df)
+#     # normalize data
+#     gp, dt = gp_model
+#     dfs = normalize_data(df, dt)
+#     x = GPPPInput(:v, RowVecs([dfs.ŝ dfs.î]))
 
-    # simulate
-    y = gp(x)
-    yμ = mean(y)
-    yσ = sqrt.(var(y))
+#     # simulate
+#     y = gp(x)
+#     yμ = mean(y)
+#     yσ = sqrt.(var(y))
 
-    # de-normalize results
-    vμ = StatsBase.reconstruct(dt.v, yμ)
-    vσ = StatsBase.reconstruct(dt.σ, yσ)
-    return vμ, vσ
-end
+#     # de-normalize results
+#     vμ = StatsBase.reconstruct(dt.v, yμ)
+#     vσ = StatsBase.reconstruct(dt.σ, yσ)
+#     return vμ, vσ
+# end
 
 
 ## GP+RC model
@@ -107,7 +104,7 @@ function build_loss_rc(mtk_model, prob, fx, v̂, t, dt)
     return loss_rc(x) = begin
         @unpack u0, p = x
         newprob = remake(prob; u0, p)
-        sol = solve(newprob; saveat=t) # TODO: rate as param
+        sol = solve(newprob, Tsit5(); saveat=t) # TODO: rate as param
         vrc = sol[mtk_model.v1]
         v̂rc = StatsBase.transform(dt.σ, vrc)
         -logpdf(fx, v̂ - v̂rc)
@@ -132,17 +129,20 @@ function fit_rc_params(rc_model, rc_ode, gp_model, gp_θ, df, dt)
     f = OptimizationFunction((u, p) -> loss(u), adtype)
     prob = OptimizationProblem(f, p0)
 
-    sol = solve(prob, LBFGS(); show_trace=true)
+    sol = solve(prob, LBFGS())
     return sol.u
 end
 
-function fit_gp_rc(model, θ, data, tt)
+function fit_gp_rc(model, θ0, profile, tt)
     # load dataset
-    df_train = sample_dataset(data, tt)
+    df_train = sample_dataset(profile, tt)
     dt = fit_zscore(df_train)
 
-    # build rc model
-    fi = t -> data.i(t)
+    # fit gp hyperparams
+    θ = fit_gp_hyperparams(model, θ0, df_train)
+
+    # fit rc params
+    fi = t -> profile.i(t)
     @mtkbuild rc = RC(; fi)
 
     tspan = (tt[begin], tt[end])
@@ -150,8 +150,9 @@ function fit_gp_rc(model, θ, data, tt)
 
     u = fit_rc_params(rc, ode, model, θ, df_train, dt)
 
+    # build rc model
     ode = remake(ode; u...)
-    sol = solve(ode, saveat=60) # todo
+    sol = solve(ode, Tsit5(); saveat=tt)
     vrc = sol[rc.v1]
     v̂rc = StatsBase.transform(dt.σ, vrc)
 
@@ -164,7 +165,7 @@ function fit_gp_rc(model, θ, data, tt)
     fx = fp(x, θ.noise)
     gp = posterior(fx, v̂ - v̂rc)
 
-    return gp, ode, rc, dt
+    return (; gp, ode, rc, dt, θ)
 end
 
 function simulate_gp_rc(model, df)
@@ -172,7 +173,7 @@ function simulate_gp_rc(model, df)
 
     tspan = (df[begin, "t"], df[end, "t"])
     ode = remake(ode; tspan)
-    sol = solve(ode, saveat=df.t)
+    sol = solve(ode, Tsit5(); saveat=df.t)
     vrc = sol[rc.v1]
 
     # 
@@ -182,8 +183,37 @@ function simulate_gp_rc(model, df)
     yμ = mean(y)
     yσ = sqrt.(var(y))
 
-    vμ = StatsBase.reconstruct(dt.v, yμ) + vrc
-    vσ = StatsBase.reconstruct(dt.σ, yσ)
+    μ = StatsBase.reconstruct(dt.v, yμ) + vrc
+    σ = StatsBase.reconstruct(dt.σ, yσ)
 
-    return vμ, vσ
+    return (; μ, σ)
+end
+
+
+#####
+
+function fit_gp_series(data)
+    tt = 0:60:(3600*24)
+    θ0 = (;
+        kernel=(;
+            ocv=(;
+                σ=positive(1.0),
+                l=positive(1.0)
+            ),
+            r=(;
+                σ=positive(1.0),
+                l=positive(1.0)
+            )
+        ),
+        noise=positive(0.001)
+    )
+
+    res = Dict()
+    Threads.@threads for id in collect(eachindex(data))
+        df = data[id]
+        profile = load_profile(df)
+        gp = fit_gp_rc(model, θ0, profile, tt)
+        res[id] = gp
+    end
+    return res
 end

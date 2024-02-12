@@ -37,7 +37,7 @@ function build_loss_function(prob, model, df)
     loss(x) = begin
         @unpack u0, p = x
         newprob = remake(prob; u0, p)
-        sol = solve(newprob, saveat=df.t)
+        sol = solve(newprob, Tsit5(); saveat=df.t)
         v = sol[model.v]
         sum(abs2, v - df.v)
     end
