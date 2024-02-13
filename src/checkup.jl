@@ -93,13 +93,13 @@ end
 ## internal resistance
 function calc_rint(df; timestep=1)
     cycles = 9
-    timestep = timestep / 3600 # seconds
+    timestep = timestep / 3600 # hours -> seconds
 
-    line = 49 # 51
-    i = 4.8 * 0.3
+    # line = 49 # 51
+    # i = 4.85 / 3
 
-    # line = 53 # 55
-    # i = 4.8 * 2 // 3
+    line = 53 # 55
+    i = 4.85 * 2 // 3
 
     resistances = Float64[]
     for cycle in 1:cycles
@@ -107,11 +107,10 @@ function calc_rint(df; timestep=1)
         df2 = copy(df)
         filter!(:Line => ∈(line), df2)
         filter!(:Count => ==(cycle), df2)
-        # idx = isapprox.(df2[:, "I[A]"], 0.0, atol=1e-3) |> findfirst
-        # @show idx
         init_time = df2[begin, "Time[h]"]
         init_voltage = df2[begin, "U[V]"]
 
+        # voltage after timestep
         idx2 = findfirst(>(init_time + timestep), df[:, "Time[h]"])
         voltage = df[idx2, "U[V]"]
 
