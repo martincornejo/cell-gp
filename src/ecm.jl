@@ -1,19 +1,23 @@
 ## mtk model
-@variables t
-D = Differential(t)
-
 @mtkmodel ECM begin
+    begin
+        @variables t
+        D = Differential(t)
+    end
     @parameters begin
-        Q = 4.9
-        R0 = 1.0e-3
-        R1 = 1.0e-3
-        τ1 = 50
+        Q = 4.85
+        R0 = 0.5e-3
+        R1 = 0.5e-3
+        τ1 = 60
+        R2 = 0.5e-3
+        τ2 = 3600
     end
     @variables begin
         i(t)
         v(t)
         vr(t)
-        v1(t)
+        v1(t) = 0.0
+        v2(t) = 0.0
         ocv(t)
         soc(t)
     end
@@ -23,11 +27,12 @@ D = Differential(t)
     end
     @equations begin
         D(soc) ~ i / (Q * 3600.0)
-        D(v1) ~ -v1 / τ1 + i * (R1 / τ1) # check sign
+        D(v1) ~ -v1 / τ1 + i * (R1 / τ1)
+        D(v2) ~ -v2 / τ2 + i * (R2 / τ2)
         vr ~ i * R0
         ocv ~ focv(soc)
         i ~ fi(t)
-        v ~ ocv + vr + v1
+        v ~ ocv + vr + v1 + v2
     end
 end
 
@@ -53,7 +58,7 @@ function fit_ecm(df, tt, focv) # input only data instead?
     @mtkbuild ecm = ECM(; focv, fi)
 
     tspan = (tt[begin], tt[end])
-    ode = ODEProblem(ecm, [ecm.v1 => 0.0, ecm.soc => 0.5], tspan, [])
+    ode = ODEProblem(ecm, [ecm.soc => 0.5], tspan, [])
 
     # build optimization problem
     p0 = ComponentArray((;
@@ -64,16 +69,18 @@ function fit_ecm(df, tt, focv) # input only data instead?
     loss = build_loss_function(ode, ecm, df_train) # loss function
     optf = OptimizationFunction((u, p) -> loss(u), adtype)
     opt = OptimizationProblem(optf, p0)
-    # opt_sol = solve(opt, LBFGS()) <-- simple LBFGS optimization
+    alg = LBFGS(;
+        alphaguess=Optim.LineSearches.InitialStatic(; alpha=10),
+        linesearch=Optim.LineSearches.BackTracking(),
+    )
 
-    # optimize with multiple alpha-values, select best fit
+    # optimize with multiple initial values, select best fit
     solutions = []
-    for alpha in (1, 10, 100, 1000)
-        alg = LBFGS(;
-            alphaguess=Optim.LineSearches.InitialStatic(; alpha),
-            linesearch=Optim.LineSearches.BackTracking(),
-        )
-        sol = solve(opt, alg)
+    for Q in (4.9, 4.4, 3.9, 3.4) # alpha in (1, 10, 100, 1000)
+        p0.p[1] = Q
+        opt = remake(opt; p=p0)
+
+        sol = solve(opt, alg; reltol=1e-4)
         if sol.retcode == ReturnCode.Success
             push!(solutions, sol)
         end
@@ -85,3 +92,5 @@ function fit_ecm(df, tt, focv) # input only data instead?
 
     return (; ecm, ode)
 end
+
+

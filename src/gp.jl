@@ -84,18 +84,22 @@ end
         D = Differential(t)
     end
     @parameters begin
-        R1 = 1.0e-3
-        τ1 = 50
+        R1 = 0.5e-3
+        τ1 = 60
+        R2 = 0.05e-3
+        τ2 = 3600
     end
     @variables begin
         i(t)
-        v1(t)
+        v1(t) = 0.0
+        v2(t) = 0.0
     end
     @structural_parameters begin
         fi
     end
     @equations begin
         D(v1) ~ -v1 / τ1 + i * (R1 / τ1) # check sign
+        D(v2) ~ -v2 / τ2 + i * (R2 / τ2) # check sign
         i ~ fi(t)
     end
 end
@@ -105,7 +109,7 @@ function build_loss_rc(mtk_model, prob, fx, v̂, t, dt)
         @unpack u0, p = x
         newprob = remake(prob; u0, p)
         sol = solve(newprob, Tsit5(); saveat=t) # TODO: rate as param
-        vrc = sol[mtk_model.v1]
+        vrc = sol[mtk_model.v1] + sol[mtk_model.v2]
         v̂rc = StatsBase.transform(dt.σ, vrc)
         -logpdf(fx, v̂ - v̂rc)
     end
@@ -128,8 +132,11 @@ function fit_rc_params(rc_model, rc_ode, gp_model, gp_θ, df, dt)
     adtype = AutoForwardDiff()
     f = OptimizationFunction((u, p) -> loss(u), adtype)
     prob = OptimizationProblem(f, p0)
-
-    sol = solve(prob, LBFGS())
+    alg = LBFGS(;
+        alphaguess=Optim.LineSearches.InitialStatic(; alpha=10),
+        linesearch=Optim.LineSearches.BackTracking(),
+    )
+    sol = solve(prob, alg; reltol=1e-4)
     return sol.u
 end
 
@@ -146,14 +153,14 @@ function fit_gp_rc(model, θ0, profile, tt)
     @mtkbuild rc = RC(; fi)
 
     tspan = (tt[begin], tt[end])
-    ode = ODEProblem(rc, [rc.v1 => 0.0], tspan, [])
+    ode = ODEProblem(rc, [], tspan, [])
 
     u = fit_rc_params(rc, ode, model, θ, df_train, dt)
 
     # build rc model
     ode = remake(ode; u...)
     sol = solve(ode, Tsit5(); saveat=tt)
-    vrc = sol[rc.v1]
+    vrc = sol[rc.v1] + sol[rc.v2]
     v̂rc = StatsBase.transform(dt.σ, vrc)
 
     # build GP model
@@ -174,7 +181,7 @@ function simulate_gp_rc(model, df)
     tspan = (df[begin, "t"], df[end, "t"])
     ode = remake(ode; tspan)
     sol = solve(ode, Tsit5(); saveat=df.t)
-    vrc = sol[rc.v1]
+    vrc = sol[rc.v1] + sol[rc.v2]
 
     # 
     dfs = normalize_data(df, dt)
@@ -191,6 +198,16 @@ end
 
 
 #####
+"SOC dependent R"
+function model(θ)
+    i = x -> x[2]
+    return @gppp let
+        ocv = θ.ocv.σ * GP(with_lengthscale(SEKernel(), θ.ocv.l) ∘ SelectTransform(1))
+        r = θ.r.σ * GP(with_lengthscale(SEKernel(), θ.r.l) ∘ SelectTransform(1))
+        vr = r * i
+        v = ocv + vr
+    end
+end
 
 function fit_gp_series(data)
     tt = 0:60:(3600*24)
