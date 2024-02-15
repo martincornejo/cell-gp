@@ -61,7 +61,7 @@ function calc_cocv(df)
     cap = dfc[end, "Ah-Step"] |> abs
     v = dfc[:, "U[V]"]
     s = dfc[:, "Ah-Step"]
-    return LinearInterpolation(v, s; extrapolate=true), cap
+    return LinearInterpolation(v, s ./ cap; extrapolate=true)
 end
 
 function calc_docv(df)
@@ -69,25 +69,20 @@ function calc_docv(df)
     cap = dfc[end, "Ah-Step"] |> abs
     v = reverse(dfc[:, "U[V]"])
     s = reverse(dfc[:, "Ah-Step"] .+ cap)
-    return LinearInterpolation(v, s; extrapolate=true), cap
+    return LinearInterpolation(v, s ./ cap; extrapolate=true)
 end
 
 function calc_pocv(df)
-    ocv_c, cap_c = calc_cocv(df)
-    ocv_d, cap_d = calc_docv(df)
-
-    cap = min(cap_c, cap_d)
+    ocv_c = calc_cocv(df)
+    ocv_d = calc_docv(df)
     ocv = c -> (ocv_c(c) + ocv_d(c)) / 2
-    return ocv, cap
+    return ocv
 end
 
 function fresh_focv()
     file = "data/check-ups/2098LG_INR21700-M50L_SammyLGL13818NewFullCU.txt"
-    # file = "data/check-ups/2097LG_INR21700-M50L_SammyLGL09107NewFullCU.txt"
     df = read_basytec(file)
-    ocv, cap = calc_pocv(df)
-    focv = soc -> ocv(soc * cap)
-    return focv
+    return calc_pocv(df)
 end
 
 ## internal resistance
@@ -190,21 +185,23 @@ function plot_ocvs(data)
     focv = fresh_focv()
 
     for (id, df) in data
+        soh = calc_capa_cccv(df) / 4.9
+
         # mean ocv
-        pocv, cap = calc_pocv(df)
-        c = s .* cap
-        lines!(ax1, s, pocv(c); color=cap / 4.9, colorrange, colormap)
+        pocv = calc_pocv(df)
+        lines!(ax1, s, pocv(s); color=soh, colorrange, colormap)
 
         # c2 = s2 .* cap
         # lines!(ax3, s2, pocv(c2); color=cap / 4.9, colorrange, colormap)
 
         # degradation
-        if id != :LGL09107 # :LGL13818
-            δv = (pocv(c) - focv(s)) * 1e3 # mV
-            lines!(ax2, s, δv; color=cap / 4.9, colorrange, colormap)
+        if id != :LGL13818
+            δv = (pocv(s) - focv(s)) * 1e3 # mV
+            lines!(ax2, s, δv; color=soh, colorrange, colormap)
         end
     end
 
+    linkxaxes!(ax1, ax2)
     hidexdecorations!(ax1, grid=false, ticks=false)
     return fig
 end
