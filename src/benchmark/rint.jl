@@ -1,27 +1,23 @@
-function simulate_pulse_resistance(ode; i=3.233, soc=0.5, Δt=10)
+function simulate_pulse_resistance_ecm(model, focv; i=3.233, soc=0.5, Δt=9.99)
+    @unpack ode = model
     pulse(t) = i # constant current pulse
-    focv = fresh_focv()
     @mtkbuild ecm = ECM(; focv, fi=pulse)
-    tspan = (0, Δt)
-    prob = ODEProblem(ecm, [ecm.v1 => 0.0, ecm.soc => soc], tspan)
-    prob = remake(prob; p=ode.p)
-    sol = solve(prob, Tsit5(); saveat=Δt)
-    Δv = abs(sol[ecm.vr][end] + sol[ecm.v1][end])
+    prob = ODEProblem(ecm, [ecm.soc => soc], (0, Δt))
+    sol = solve(prob, Tsit5(); p=ode.p, saveat=Δt)
+    Δv = abs(sol[ecm.vr][end] + sol[ecm.v1][end] + sol[ecm.v2][end])
     return Δv / i
 end
 
-function simulate_pulse_gp(model, df; i=3.233, soc=0.5, Δt=10)
+function simulate_pulse_resistance_gp(model, df; i=3.233, soc=0.5, Δt=9.99)
     @unpack ode, gp, dt = model
 
     # RC
     pulse(t) = i # constant current pulse
     @mtkbuild rc = RC(; fi=pulse)
-    tspan = (0, Δt)
-    prob = ODEProblem(rc, [rc.v1 => 0.0], tspan)
-    prob = remake(prob; p=ode.p)
+    prob = ODEProblem(rc, [], (0, Δt); p=ode.p)
     sol = solve(prob, Tsit5())
-    Δv = abs(sol[rc.v1][end]) # TODO add 2nd RC
-    r1 = Δv / i
+    Δv = abs(sol[rc.v1][end] + sol[ecm.v2][end])
+    rrc = Δv / i
 
     # rint from GP
     capa = calc_capa_cccv(df)
@@ -35,33 +31,17 @@ function simulate_pulse_gp(model, df; i=3.233, soc=0.5, Δt=10)
     r0 = dt.σ.scale[1] / dt.i.scale[1] # scale to Ω
     rint = rμ * r0
 
-    return r1 + rint
+    return rint + rrc
 end
 
-function benchmark_rint(ecms, gpms; timestep=9.99, soc=5)
-    r_sims = Float64[]
-    r_mess = Float64[]
-    r_errs = Float64[]
+function benchmark_rint(ecms, gpms, data)
+    focv = fresh_ocv()
+    sohs = [calc_capa_cccv(df) / 4.9 for df in values(data)]
+    ids = collect(keys(data))[sortperm(sohs)] # sort cell-id by soh
 
-    r_sim = simulate_pulse_resistance(ode; Δt) * 1e3
-    df = data[id]
-    r_meas = calc_rint(df; timestep=Δt)[soc] * 1e3
-    r_error = (r_sim - r_meas) / r_meas * 100
+    r_ecm = ids .|> id -> simulate_pulse_resistance_ecm(ecms[id], focv)
+    r_gp = ids .|> id -> simulate_pulse_resistance_gp(gpms[id], data[id])
+    r_cu = ids .|> id -> calc_rint(data[id])[5]
+    DataFrame(; id=ids, r_cu, r_ecm, r_gp)
 end
 
-function analyze_rint_gp(gps, data)
-    r_cu = Float64[]
-    r_gp = Float64[]
-    for id in ids
-        df = data[id]
-        r1 = calc_rint(df; timestep=9.99)[5] * 1e3
-
-        gp = gps[id]
-        r2 = simulate_pulse_gp(gp, df) * 1e3
-        # r_error = (r_gp - r_meas) / r_meas * 100
-        # @info id r_gp r_meas r_error
-        push!(r_cu, r1)
-        push!(r_gp, r2)
-    end
-    DataFrame(; ids, r_cu, r_gp)
-end

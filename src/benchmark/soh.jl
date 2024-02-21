@@ -1,4 +1,4 @@
-function gp_soh(gp_model, df; v=(3.6, 3.85))
+function ocv_capa_gp(gp_model, df; v=(3.6, 3.8))
     profile = load_profile(df)
     tt = 0:60:(24*2600)
     df_train = sample_dataset(profile, tt)
@@ -19,8 +19,7 @@ function gp_soh(gp_model, df; v=(3.6, 3.85))
     return f(v2) - f(v1)
 end
 
-
-function ecm_soh(ecm, df, focv; v=(3.6, 3.85))
+function ocv_capa_ecm(ecm, df, focv; v=(3.6, 3.8))
     profile = load_profile(df)
     tt = 0:60:(24*2600)
     df_train = sample_dataset(profile, tt)
@@ -37,34 +36,20 @@ function ecm_soh(ecm, df, focv; v=(3.6, 3.85))
     return f(v2) - f(v1)
 end
 
-function analyze_soh(gps, ecms, data)
-    v1 = 3.6
-    v2 = 3.8
-
+function benchmark_soh(ecms, gpms, data; v=(3.6, 3.8))
+    v1, v2 = v
     focv = fresh_focv()
     invf = ConstantInterpolation((0:0.01:1) .* 4.9, focv(0:0.01:1))
     soh0 = invf(v2) - invf(v1)
 
-    soh_cu = Float64[]
-    soh_gp = Float64[]
-    soh_ecm = Float64[]
-    soh_ecm2 = Float64[]
+    sohs = [calc_capa_cccv(df) / 4.9 for df in values(data)]
+    ids = collect(keys(data))[sortperm(sohs)] # sort cell-id by soh
 
-    for id in ids
-        gp = gps[id]
-        df = data[id]
-        ecm = ecms[id]
-        soh = calc_capa_cccv(df) / 4.9 * 100
-        soh2 = ecm.ode.p[1] / 4.9 * 100
-        soh3 = gp_soh(gp, df; v=(v1, v2)) / soh0 * 100
-        soh4 = ecm_soh(ecm, df, focv; v=(v1, v2)) / soh0 * 100
+    soh_cu = ids .|> id -> calc_capa_cccv(data[id]) / 4.9
+    soh_ocv_gp = ids .|> id -> ocv_capa_gp(gpms[id], data[id]; v) / soh0
+    soh_ocv_ecm = ids .|> id -> ocv_capa_ecm(ecms[id], data[id], focv; v) / soh0
+    soh_ecm = ids .|> id -> ecms[id].ode.p[1] / 4.9
 
-        push!(soh_cu, soh)
-        push!(soh_ecm, soh2)
-        push!(soh_gp, soh3)
-        push!(soh_ecm2, soh4)
-    end
-
-    return DataFrame(; ids, soh_cu, soh_ecm, soh_gp, soh_ecm2)
+    return DataFrame(; id=ids, soh_cu, soh_ocv_gp, soh_ocv_ecm, soh_ecm)
 end
 

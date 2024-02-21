@@ -1,4 +1,4 @@
-function analyze_ocv_gp(gp_model, df)
+function analyze_ocv_gp(model, df)
     profile = load_profile(df)
     tt = 0:60:(24*2600)
     df_train = sample_dataset(profile, tt)
@@ -14,7 +14,7 @@ function analyze_ocv_gp(gp_model, df)
     ocv_meas = pocv(srange)
 
     # gp
-    @unpack gp, dt = gp_model
+    @unpack gp, dt = model
     ŝ = StatsBase.transform(dt.s, crange)
     i = zero.(ŝ)
     x = GPPPInput(:ocv, RowVecs([ŝ i]))
@@ -29,7 +29,8 @@ function analyze_ocv_gp(gp_model, df)
     return (; mae, max_e)
 end
 
-function analyze_ocv_ecm(ecm, df)
+function analyze_ocv_ecm(ecm, df; correct_soc=true)
+    @unpack ode = ecm
     profile = load_profile(df)
     tt = 0:60:(24*2600)
     df_train = sample_dataset(profile, tt)
@@ -40,12 +41,11 @@ function analyze_ocv_ecm(ecm, df)
     s = 0:0.001:1
 
     cap_real = calc_capa_cccv(df)
-    cap_sim = ecm.ode.p[1]
+    cap_sim = ode.p[1]
 
     soc_real = 0.385
-    soc_sim = ecm.ode.u0[1]
-    Δsoc = soc_sim - soc_real
-    # Δsoc = 0.0
+    soc_sim = ode.u0[1]
+    Δsoc = correct_soc ? soc_sim - soc_real : 0.0
 
     # real
     c1 = s .* cap_real
@@ -68,4 +68,19 @@ function analyze_ocv_ecm(ecm, df)
     max_e = maximum(abs, e) * 1e3
 
     return (; mae, max_e)
+end
+
+function benchmark_ocv(ecms, gpms, data)
+    sohs = [calc_capa_cccv(df) / 4.9 for df in values(data)]
+    ids = collect(keys(data))[sortperm(sohs)] # sort cell-id by soh
+
+    ecm_ocv = ids .|> id -> analyze_ocv_ecm(ecms[id], data[id])
+    ecm_mae = ecm_ocv .|> first
+    ecm_max = ecm_ocv .|> last
+
+    gp_ocv = ids .|> id -> analyze_ocv_gp(gpms[id], data[id])
+    gp_mae = gp_ocv .|> first
+    gp_max = gp_ocv .|> last
+
+    DataFrame(; id=ids, ecm_mae, ecm_max, gp_mae, gp_max)
 end

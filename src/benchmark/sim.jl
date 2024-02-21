@@ -1,4 +1,4 @@
-function benchmark_simulation(ecm_model, gp_model, df, tt)
+function simulation_error(ecm_model, gp_model, df, tt)
     # real voltage
     profile = load_profile(df)
     df_test = sample_dataset(profile, tt)
@@ -6,17 +6,26 @@ function benchmark_simulation(ecm_model, gp_model, df, tt)
 
     # ECM
     @unpack ecm, ode = ecm_model
-    ode = remake(ode; tspan)
+    ode = remake(ode; tspan=(tt[begin], tt[end]))
     sol = solve(ode, Tsit5(); saveat=tt)
     v = sol[ecm.v]
     l2_ecm = sum(abs2, v - v̄)
 
     # GP-ECM
-    @unpack gp = gp_model
-    v = simulate_gp_rc(gp, df_test)
-    l2_gp = sum(ab2, v.μ - v̄)
+    v = simulate_gp_rc(gp_model, df_test)
+    l2_gp = sum(abs2, v.μ - v̄)
 
     return (; l2_ecm, l2_gp)
+end
+
+function benchmark_simulation(ecms, gpms, data, tt)
+    sohs = [calc_capa_cccv(df) / 4.9 for df in values(data)]
+    ids = collect(keys(data))[sortperm(sohs)] # sort cell-id by soh
+
+    sim = ids .|> id -> simulation_error(ecms[id], gpms[id], data[id], tt)
+    l2_ecm = sim .|> first
+    l2_gp = sim .|> last
+    DataFrame(; id=ids, l2_ecm, l2_gp)
 end
 
 function plot_sim(ecm_models, gp_models, data)
