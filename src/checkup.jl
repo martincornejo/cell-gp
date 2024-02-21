@@ -57,19 +57,41 @@ end
 
 ## OCV
 function calc_cocv(df)
-    dfc = filter(:Line => ∈(29), df)
-    cap = dfc[end, "Ah-Step"] |> abs
-    v = dfc[:, "U[V]"]
-    s = dfc[:, "Ah-Step"]
-    return LinearInterpolation(v, s ./ cap; extrapolate=true)
+    df_cc = filter(:Line => ∈(29), df)
+    df_cv = filter(:Line => ∈(30), df)
+
+    cap_cc = df_cc[end, "Ah-Step"] |> abs
+    cap_cv = df_cv[end, "Ah-Step"] |> abs
+    cap = cap_cc + cap_cv
+
+    v_cc = df_cc[:, "U[V]"]
+    s_cc = df_cc[:, "Ah-Step"]
+    v_cv = df_cv[:, "U[V]"]
+    s_cv = df_cv[:, "Ah-Step"] .+ cap_cc
+
+    v = [v_cc; v_cv]
+    s = [s_cc; s_cv]
+    f = LinearInterpolation(v, s ./ cap; extrapolate=true)
+    return f
 end
 
 function calc_docv(df)
-    dfc = filter(:Line => ∈(31), df)
-    cap = dfc[end, "Ah-Step"] |> abs
-    v = reverse(dfc[:, "U[V]"])
-    s = reverse(dfc[:, "Ah-Step"] .+ cap)
-    return LinearInterpolation(v, s ./ cap; extrapolate=true)
+    df_cc = filter(:Line => ∈(27), df)
+    df_cv = filter(:Line => ∈(28), df)
+
+    cap_cc = df_cc[end, "Ah-Step"] |> abs
+    cap_cv = df_cv[end, "Ah-Step"] |> abs
+    cap = cap_cc + cap_cv
+
+    v_cc = df_cc[:, "U[V]"]
+    s_cc = df_cc[:, "Ah-Step"] .+ cap
+    v_cv = df_cv[:, "U[V]"]
+    s_cv = df_cv[:, "Ah-Step"] .+ cap_cv
+
+    v = reverse([v_cc; v_cv])
+    s = reverse([s_cc; s_cv])
+    f = LinearInterpolation(v, s ./ cap; extrapolate=true)
+    return f
 end
 
 function calc_pocv(df)
@@ -86,7 +108,7 @@ function fresh_focv()
 end
 
 ## internal resistance
-function calc_rint(df; timestep=1)
+function calc_rint(df; timestep=9.99)
     cycles = 9
     timestep = timestep / 3600 # hours -> seconds
 
@@ -138,89 +160,4 @@ function sample_dataset(data, tt)
         :s => data.s(tt),
         :T => data.T(tt)
     )
-end
-
-
-## plots
-function plot_checkup_profile(df)
-    fig = Figure(size=(600, 200), fontsize=11, figure_padding=5)
-    gl = GridLayout(fig[1, 1])
-    ax1 = Axis(gl[1, 1]; ylabel="Voltage (V)")
-    ax2 = Axis(gl[2, 1]; ylabel="Current (A)", xlabel="Time (h)")
-
-    lines!(ax1, df[:, "Time[h]"], df[:, "U[V]"], color=Cycled(1))
-    lines!(ax2, df[:, "Time[h]"], df[:, "I[A]"], color=Cycled(2))
-    xlims!(ax1, (df[begin, "Time[h]"], df[end, "Time[h]"]))
-    xlims!(ax2, (df[begin, "Time[h]"], df[end, "Time[h]"]))
-
-    idx = [findfirst(df[:, "Line"] .== line) for line in (25, 35, 36, 47)]
-    vlines!(ax1, df[idx, "Time[h]"], color=:gray, linestyle=:dashdot)
-    vlines!(ax2, df[idx, "Time[h]"], color=:gray, linestyle=:dashdot)
-
-    hidexdecorations!(ax1, grid=false, ticks=false)
-    rowgap!(gl, 5)
-    fig
-end
-
-function plot_ocvs(data)
-    s = 0:0.001:1.0
-    colormap = :dense
-    colorrange = (0.6, 1.0)
-
-    fig = Figure(size=(350, 400), fontsize=11, figure_padding=7)
-    gl = GridLayout(fig[1, 1])
-
-    Colorbar(gl[1, 1]; colorrange, colormap, label="SOH", vertical=false) #, flipaxis=false)
-    ax1 = Axis(gl[2, 1]; ylabel="OCV (V)") # mean pOCV
-    ax2 = Axis(gl[3, 1]; xlabel="SOC", ylabel="δV (mV)")
-    rowgap!(gl, 6)
-
-    # ax1 = Axis(fig[1, 1]; ylabel="OCV (V)") # mean pOCV
-    # ax2 = Axis(fig[2, 1]; xlabel="SOC", ylabel="δV (mV)")
-    # Colorbar(fig[:, 2]; colorrange, colormap, label="SOH") #, vertical=false, flipaxis=false)
-
-    # s2 = 0.5:0.001:1.0
-    # ax3 = Axis(fig, bbox = BBox(350, 475, 290, 370))
-
-    focv = fresh_focv()
-
-    for (id, df) in data
-        soh = calc_capa_cccv(df) / 4.9
-
-        # mean ocv
-        pocv = calc_pocv(df)
-        lines!(ax1, s, pocv(s); color=soh, colorrange, colormap)
-
-        # c2 = s2 .* cap
-        # lines!(ax3, s2, pocv(c2); color=cap / 4.9, colorrange, colormap)
-
-        # degradation
-        if id != :LGL13818
-            δv = (pocv(s) - focv(s)) * 1e3 # mV
-            lines!(ax2, s, δv; color=soh, colorrange, colormap)
-        end
-    end
-
-    linkxaxes!(ax1, ax2)
-    hidexdecorations!(ax1, grid=false, ticks=false)
-    return fig
-end
-
-function plot_rints(data; timestep=1)
-    soc = 0.9:-0.1:0.1
-    colormap = :dense
-    colorrange = (0.6, 1.0)
-
-    fig = Figure(size=(359, 350), fontsize=11)
-    ax = Axis(fig[1, 1]; xlabel="SOC", ylabel="Resistance (mΩ)")
-    Colorbar(fig[1, 2]; colorrange, colormap, label="SOH")
-
-    for (id, df) in data
-        soh = calc_capa_cc(df) / 4.9
-        r = calc_rint(df; timestep) * 1e3 # mΩ
-
-        scatter!(ax, soc, r; color=soh, colorrange, colormap)
-    end
-
-    return fig
 end
