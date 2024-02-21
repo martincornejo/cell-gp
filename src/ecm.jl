@@ -94,3 +94,14 @@ function fit_ecm(df, tt, focv) # input only data instead?
 end
 
 
+function fit_ecm_series(data)
+    tt = 0:(24*3600.0)
+    focv = fresh_focv()
+    res = Dict()
+    Threads.@threads for id in collect(eachindex(data))
+        df = data[id]
+        res[id] = fit_ecm(df, tt, focv) # model
+    end
+    return res
+end
+

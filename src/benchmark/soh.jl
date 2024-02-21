@@ -4,9 +4,11 @@ function ocv_capa_gp(gp_model, df; v=(3.6, 3.8))
     tt = 0:60:(24*2600)
     df_train = sample_dataset(profile, tt)
 
-    cap = calc_capa_cccv(df)
     cmin, cmax = extrema(df_train.s) # charge
     crange = cmin:0.001:cmax
+    soc0 = 0.385 * calc_capa_cc(df)
+    s = crange .+ soc0
+    v1, v2 = v
 
     @unpack gp, dt = gp_model
     ŝ = StatsBase.transform(dt.s, crange)
@@ -15,9 +17,6 @@ function ocv_capa_gp(gp_model, df; v=(3.6, 3.8))
     ocv_gp = gp(x)
     μ = StatsBase.reconstruct(dt.v, mean(ocv_gp))
     σ = StatsBase.reconstruct(dt.σ, sqrt.(var(ocv_gp)))
-
-    s = crange .+ 0.385 * cap
-    v1, v2 = v
 
     c1μ = s[findfirst(>=(v1), μ)]
     c1σ = c1μ - s[findfirst(>=(v1), μ + σ)]
@@ -36,8 +35,9 @@ function ocv_capa_ecm(ecm, df, focv; v=(3.6, 3.8))
     df_train = sample_dataset(profile, tt)
 
     cap = calc_capa_cccv(df)
+    soc0 = 0.385 * calc_capa_cc(df)
     cmin, cmax = extrema(df_train.s) # charge
-    crange = (cmin:0.001:cmax) .+ 0.385 * cap
+    crange = (cmin:0.001:cmax) .+ soc0
     srange = crange ./ cap
 
     cap_ecm = ecm.ode.p[1]
