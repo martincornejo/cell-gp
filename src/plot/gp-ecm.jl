@@ -1,21 +1,28 @@
 function plot_gp_ecm(df, gp_model)
+    fig = Figure()
+
+    # soc bound
+    cap = calc_capa_cccv(df)
     profile = load_profile(df)
-    tt = 0:60:(24*2600)
+    tt = 0:(3*24*2600)
     df_train = sample_dataset(profile, tt)
 
+
+    colormap = :dense
+    colorrange = (0.6, 1.0)
+
+    soc0 = 0.385 * calc_capa_cc(df)
+
+    # model
     focv = calc_pocv(df)
-
     cap = calc_capa_cccv(df)
-    soh = calc_capa_cccv(df) / 4.9
+    soh = cap / 4.9
     @unpack gp, dt = gp_model
-
-    vl = @. (extrema(df_train.s) / cap) + 0.385
-
-    fig = Figure()
 
     # OCV
     s = 0:0.01:1
-    ŝ = StatsBase.transform(dt.s, (s .- 0.385) .* cap)
+    # ŝ = StatsBase.transform(dt.s, (s .- 0.385) .* cap)
+    ŝ = StatsBase.transform(dt.s, (s .* cap) .- soc0)
     i = zeros(size(s))
     data = RowVecs([ŝ i])
     x = GPPPInput(:ocv, data)
@@ -33,8 +40,11 @@ function plot_gp_ecm(df, gp_model)
     lines!(ax1, s, ocvμ)
     lines!(ax1, s, ocv_meas)
     band!(ax1, s, ocvμ - ocvσ, ocvμ + ocvσ)
+
+    vl = [((extrema(df_train.s) .+ soc0) ./ cap)...]
     vlines!(ax1, vl, color=(:black, 0.5), linestyle=:dash)
 
+    s̄ = (df_train.s .+ soc0) ./ cap
     # s̄ = (df_train.s ./ cap) .+ 0.385
     # scatter!(s̄, df_train.v; color=abs.(df_train.i), alpha=0.5)
 
@@ -51,7 +61,7 @@ function plot_gp_ecm(df, gp_model)
     ax2.ylabel = "R (mΩ)"
     xlims!(ax2, (0, 1))
     ylims!(ax2, (0.0, 90))
-    lines!(ax2, s, rμ; color=soh, colorrange, colormap)
+    lines!(ax2, s, rμ; color=soh, colorrange, colormap=colormap)
     band!(ax2, s, rμ - rσ, rμ + rσ)
     vlines!(ax2, vl, color=(:black, 0.5), linestyle=:dash)
 

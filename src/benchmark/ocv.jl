@@ -5,9 +5,10 @@ function analyze_ocv_gp(model, df)
 
     # soh range
     cap = calc_capa_cccv(df)
+    soc0 = 0.385 * calc_capa_cc(df)
     cmin, cmax = extrema(df_train.s) # charge
     crange = cmin:0.01:cmax
-    srange = (crange ./ cap) .+ 0.385
+    srange = (crange .+ soc0) ./ cap
 
     # real
     pocv = calc_pocv(df)
@@ -37,13 +38,14 @@ function analyze_ocv_ecm(ecm, df; correct_soc=true)
 
     # function ocv(ecm, df)
     pocv = calc_pocv(df)
+    soc0 = 0.385 * calc_capa_cc(df)
     focv = fresh_focv()
     s = 0:0.001:1
 
     cap_real = calc_capa_cccv(df)
     cap_sim = ode.p[1]
 
-    soc_real = 0.385
+    soc_real = soc0 / cap_real
     soc_sim = ode.u0[1]
     Δsoc = correct_soc ? soc_sim - soc_real : 0.0
 
@@ -59,7 +61,7 @@ function analyze_ocv_ecm(ecm, df; correct_soc=true)
 
     # soh range
     cap = calc_capa_cccv(df)
-    smin, smax = extrema(df_train.s) .+ 0.385 * cap
+    smin, smax = extrema(df_train.s) .+ soc0
     v_real = ocv_real(smin:0.01:smax)
     v_sim = ocv_sim(smin:0.01:smax)
 
