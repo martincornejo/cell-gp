@@ -4,10 +4,11 @@ function ocv_capa_gp(gp_model, df; v=(3.6, 3.8))
     tt = 0:60:(24*2600)
     df_train = sample_dataset(profile, tt)
 
+    cap = calc_capa_cccv(df)
     cmin, cmax = extrema(df_train.s) # charge
     crange = cmin:0.001:cmax
-    soc0 = 0.385 * calc_capa_cc(df)
-    s = crange .+ soc0
+    soc0 = inital_soc(df)
+    s = crange .+ soc0 * cap
     v1, v2 = v
 
     @unpack gp, dt = gp_model
@@ -35,9 +36,9 @@ function ocv_capa_ecm(ecm, df, focv; v=(3.6, 3.8))
     df_train = sample_dataset(profile, tt)
 
     cap = calc_capa_cccv(df)
-    soc0 = 0.385 * calc_capa_cc(df)
+    soc0 = initial_soc(df)
     cmin, cmax = extrema(df_train.s) # charge
-    crange = (cmin:0.001:cmax) .+ soc0
+    crange = (cmin:0.001:cmax) .+ soc0 * cap
     srange = crange ./ cap
 
     cap_ecm = ecm.ode.p[1]

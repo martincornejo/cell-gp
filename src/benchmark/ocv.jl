@@ -5,10 +5,10 @@ function analyze_ocv_gp(model, df)
 
     # soh range
     cap = calc_capa_cccv(df)
-    soc0 = 0.385 * calc_capa_cc(df)
+    soc0 = initial_soc(df)
     cmin, cmax = extrema(df_train.s) # charge
     crange = cmin:0.01:cmax
-    srange = (crange .+ soc0) ./ cap
+    srange = (crange ./ cap) .+ soc0
 
     # real
     pocv = calc_pocv(df)
@@ -36,32 +36,30 @@ function analyze_ocv_ecm(ecm, df; correct_soc=true)
     tt = 0:60:(24*2600)
     df_train = sample_dataset(profile, tt)
 
-    # function ocv(ecm, df)
     pocv = calc_pocv(df)
-    soc0 = 0.385 * calc_capa_cc(df)
     focv = fresh_focv()
-    s = 0:0.001:1
 
     cap_real = calc_capa_cccv(df)
     cap_sim = ode.p[1]
 
-    soc_real = soc0 / cap_real
-    soc_sim = ode.u0[1]
-    Δsoc = correct_soc ? soc_sim - soc_real : 0.0
+    soc0 = initial_soc(df)
+    soc0_sim = ode.u0[1]
+    Δsoc = correct_soc ? soc0_sim - soc0 : 0.0
 
-    # real
+    s = 0:0.001:1
+
+    # OCV measured
     c1 = s .* cap_real
     ocv1 = pocv(s)
     ocv_real = ConstantInterpolation(ocv1, c1)
 
-    # estimated
+    # OCV estimated
     c2 = (s .- Δsoc) .* cap_sim
     ocv2 = focv(s)
     ocv_sim = ConstantInterpolation(ocv2, c2)
 
-    # soh range
-    cap = calc_capa_cccv(df)
-    smin, smax = extrema(df_train.s) .+ soc0
+    # soc range
+    smin, smax = extrema(df_train.s) .+ soc0 * cap_real
     v_real = ocv_real(smin:0.01:smax)
     v_sim = ocv_sim(smin:0.01:smax)
 

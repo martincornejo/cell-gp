@@ -161,3 +161,9 @@ function sample_dataset(data, tt)
         :T => data.T(tt)
     )
 end
+
+function initial_soc(df)
+    capa_cccv = calc_capa_cccv(df)
+    capa_cc = calc_capa_cc(df)
+    return capa_cc / capa_cccv * 0.38
+end

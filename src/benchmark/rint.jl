@@ -20,9 +20,9 @@ function simulate_pulse_resistance_gp(model, df; i=3.233, soc=0.5, Δt=9.99)
     r_rc = Δv / i
 
     # rint from GP
-    capa = calc_capa_cccv(df)
-    soc0 = 0.385 * calc_capa_cc(df)
-    c = capa * soc - soc0
+    cap = calc_capa_cccv(df)
+    soc0 = initial_soc(df)
+    c = cap * (soc - soc0)
     ĉ = StatsBase.transform(dt.s, [c])
     x = GPPPInput(:r, RowVecs([ĉ zero.(ĉ)]))
     r = gp(x)
