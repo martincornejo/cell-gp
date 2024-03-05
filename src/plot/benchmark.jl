@@ -31,12 +31,12 @@ function plot_ocv_fit(ecms, gpms, data, ids; correct_soc=true)
         # real
         c1 = s .* cap_real
         ocv1 = pocv(s)
-        lines!(ax1, c1, ocv1; label="pOCV", color=:black)
+        ln1 = lines!(ax1, c1, ocv1; label="pOCV", color=:black)
 
         # estimated
         c2 = (s .- Δsoc) .* cap_sim
         ocv2 = focv(s)
-        lines!(ax1, c2, ocv2; label="ECM")
+        ln2 = lines!(ax1, c2, ocv2; label="ECM")
 
         soh = round(cap_real / 4.9 * 100; digits=2)
         ax1.title = "ID:$id SOH: $soh %"
@@ -48,18 +48,25 @@ function plot_ocv_fit(ecms, gpms, data, ids; correct_soc=true)
         ocv3 = gp(x)
         μ = StatsBase.reconstruct(dt.v, mean(ocv3))
         σ = StatsBase.reconstruct(dt.σ, sqrt.(var(ocv3)))
-        lines!(ax1, c1, μ; label="GP", color=Cycled(2))
-        band!(ax1, c1, μ - 2σ, μ + 2σ; label="GP", color=(Makie.wong_colors()[2], 0.3))
+        ln3 = lines!(ax1, c1, μ; label="GP-ECM", color=Cycled(2))
+        bnd = band!(ax1, c1, μ - 2σ, μ + 2σ; label="GP-ECM", color=(Makie.wong_colors()[2], 0.3))
 
         ## SOC
         tt = 0:60:(3*24*3600)
         profile = load_profile(df)
         df_train = sample_dataset(profile, tt)
 
-        hist!(ax2, df_train.s .+ soc0 * cap_real, color=(:gray, 0.3), label="SOC")
+        hst = hist!(ax2, df_train.s .+ soc0 * cap_real, color=(:gray, 0.3), label="SOC")
         hideydecorations!(ax2)
-        axislegend(ax1; position=:rb, merge=true)
-        axislegend(ax2; position=:lt)
+        # axislegend(ax1; position=:rb, merge=true)
+        # axislegend(ax2; position=:lt)
+        if i == n
+            Legend(fig[2, :],
+                [hst, ln1, ln2, [ln3, bnd]],
+                ["SOC distribution in the training dataset", "Measured pOCV", "ECM fitted OCV", "GP-ECM fitted OCV"],
+                orientation=:horizontal, tellwidth=false, tellheight=true
+            )
+        end
 
         smin, smax = extrema(df_train.s) .+ soc0 * cap_real
         vlines!(ax1, [smin, smax], color=:gray, linestyle=:dashdot)
@@ -82,10 +89,10 @@ function plot_rint_fit(df)
     # ECM-GP
     μ = Measurements.value.(df.r_gp)
     σ = Measurements.uncertainty.(df.r_gp)
-    scatter!(ax, df.r_cu, μ, label="ECM-GP")
-    errorbars!(ax, df.r_cu, μ, 2σ; whiskerwidth=5, color=Makie.wong_colors()[2])
+    scatter!(ax, df.r_cu, μ, label="GP-ECM")
+    errorbars!(ax, df.r_cu, μ, 2σ; label="GP-ECM", whiskerwidth=5, color=Makie.wong_colors()[2])
 
-    axislegend(ax; position=:rb)
+    axislegend(ax; merge=true, position=:rb)
     fig
 end
 
@@ -101,10 +108,10 @@ function plot_soh_fit(df)
     # ECM-GP
     μ = Measurements.value.(df.soh_ocv_gp)
     σ = Measurements.uncertainty.(df.soh_ocv_gp)
-    scatter!(ax, df.soh_cu, μ, label="ECM-GP")
-    errorbars!(ax, df.soh_cu, μ, 2σ; whiskerwidth=5, color=Makie.wong_colors()[2])
+    scatter!(ax, df.soh_cu, μ, label="GP-ECM")
+    errorbars!(ax, df.soh_cu, μ, 2σ; label="GP-ECM", whiskerwidth=5, color=Makie.wong_colors()[2])
     # scatter!(ax, df.soh_cu, df.soh_ocv_ecm, label="ECM-OCV")
 
-    axislegend(ax; position=:rb)
+    axislegend(ax; merge=true, position=:rb)
     fig
 end
