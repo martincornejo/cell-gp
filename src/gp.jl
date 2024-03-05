@@ -13,71 +13,12 @@ function normalize_data(df, dt)
     v̂ = StatsBase.transform(dt.v, df.v)
     î = StatsBase.transform(dt.i, df.i)
     ŝ = StatsBase.transform(dt.s, df.s)
-    T̂ = StatsBase.transform(dt.s, df.s)
+    T̂ = StatsBase.transform(dt.T, df.T)
     return DataFrame(; df.t, v̂, î, ŝ, T̂)
 end
 
-## GP model
-function build_gp_loss(f, x, y)
-    function loss(θ)
-        gp = f(θ.kernel)
-        fx = gp(x, θ.noise) # finite gp
-        return -logpdf(fx, y)
-    end
-end
-
-function fit_gp_hyperparams(model, θ, df)
-    dt = fit_zscore(df)
-    dfs = normalize_data(df, dt)
-    x = GPPPInput(:v, RowVecs([dfs.ŝ dfs.î]))
-    y = dfs.v̂
-
-    loss = build_gp_loss(model, x, y)
-    θ0, unflatten = ParameterHandling.value_flatten(θ)
-    loss_packed = loss ∘ unflatten
-
-    adtype = AutoZygote()
-    f = OptimizationFunction((u, p) -> loss_packed(u), adtype)
-    prob = OptimizationProblem(f, θ0)
-
-    sol = solve(prob, LBFGS(); reltol=1e-3)
-    θ_opt = unflatten(sol.u)
-
-    return θ_opt
-end
-
-# function build_gp(model, θ, df, dt)
-#     # normalize data
-#     dfs = normalize_data(df, dt)
-#     x = GPPPInput(:v, RowVecs([dfs.ŝ dfs.î]))
-#     y = dfs.v̂
-
-#     # build gp
-#     fp = model(θ.kernel)
-#     fx = fp(x, θ.noise)
-#     gp = posterior(fx, y)
-#     return gp, dt
-# end
-
-# function simulate_gp(gp_model, df)
-#     # normalize data
-#     gp, dt = gp_model
-#     dfs = normalize_data(df, dt)
-#     x = GPPPInput(:v, RowVecs([dfs.ŝ dfs.î]))
-
-#     # simulate
-#     y = gp(x)
-#     yμ = mean(y)
-#     yσ = sqrt.(var(y))
-
-#     # de-normalize results
-#     vμ = StatsBase.reconstruct(dt.v, yμ)
-#     vσ = StatsBase.reconstruct(dt.σ, yσ)
-#     return vμ, vσ
-# end
-
-
-## GP+RC model
+## GP-ECM model
+# RCM model
 @mtkmodel RC begin
     begin
         @variables t
@@ -86,7 +27,7 @@ end
     @parameters begin
         R1 = 0.5e-3
         τ1 = 60
-        R2 = 0.05e-3
+        R2 = 0.5e-3
         τ2 = 3600
     end
     @variables begin
@@ -104,30 +45,49 @@ end
     end
 end
 
-function build_loss_rc(mtk_model, prob, fx, v̂, t, dt)
-    return loss_rc(x) = begin
-        @unpack u0, p = x
-        newprob = remake(prob; u0, p)
-        sol = solve(newprob, Tsit5(); saveat=t) # TODO: rate as param
-        vrc = sol[mtk_model.v1] + sol[mtk_model.v2]
-        v̂rc = StatsBase.transform(dt.σ, vrc)
+# GP model
+"SOC dependent R"
+function model(θ)
+    i = x -> x[2]
+    return @gppp let
+        ocv = θ.ocv.σ * GP(with_lengthscale(SEKernel(), θ.ocv.l) ∘ SelectTransform(1))
+        r = θ.r.σ * GP(with_lengthscale(SEKernel(), θ.r.l) ∘ SelectTransform(1))
+        vr = r * i
+        v = ocv + vr
+    end
+end
+
+function build_nlml(rc_model, gp_model, x, v̂, t, dt)
+    return loss(ϑ) = begin
+        @unpack ode, rc = rc_model
+        @unpack u0, p = ϑ.rc
+
+        # RC
+        prob = remake(ode; u0, p)
+        sol = solve(prob, Tsit5(); saveat=t)
+        vrc = sol[rc.v1] + sol[rc.v2]
+        v̂rc = StatsBase.transform(dt.σ, vrc) # normalized RC-voltage drop
+
+        # GP
+        θ = softplus.(ϑ.gp) # transform to ensure parameters are positive
+        fp = gp_model(θ.kernel)
+        fx = fp(x, θ.noise) # finite gp
         -logpdf(fx, v̂ - v̂rc)
     end
 end
 
-function fit_rc_params(rc_model, rc_ode, gp_model, gp_θ, df, dt)
-    dfs = normalize_data(df, dt)
-    x = GPPPInput(:v, RowVecs([dfs.ŝ dfs.î]))
-    v̂ = dfs.v̂
+function fit_gp_ecm_params(rc_model, gp_model, θ0, df, dt)
+    x = GPPPInput(:v, RowVecs([df.ŝ df.î]))
 
-    fp = gp_model(gp_θ.kernel)
-    fx = fp(x, gp_θ.noise)
-
-    loss = build_loss_rc(rc_model, rc_ode, fx, v̂, df.t, dt)
+    loss = build_nlml(rc_model, gp_model, x, df.v̂, df.t, dt)
     p0 = ComponentArray((;
-        u0=rc_ode.u0,
-        p=rc_ode.p
+        rc=(;
+            u0=rc_model.ode.u0,
+            p=rc_model.ode.p
+        ),
+        gp=θ0
     ))
+    p0.gp = invsoftplus.(p0.gp) # transform inital parameters (to later ensure they are positive with softplus)
 
     adtype = AutoForwardDiff()
     f = OptimizationFunction((u, p) -> loss(u), adtype)
@@ -136,47 +96,49 @@ function fit_rc_params(rc_model, rc_ode, gp_model, gp_θ, df, dt)
         alphaguess=Optim.LineSearches.InitialStatic(; alpha=10),
         linesearch=Optim.LineSearches.BackTracking(),
     )
-    sol = solve(prob, alg; reltol=1e-4)
+    sol = solve(prob, alg; reltol=1e-4, show_trace=true)
     return sol.u
 end
 
-function fit_gp_rc(model, θ0, profile, tt)
+function fit_gp_ecm(gp_model, θ0, df, tt)
     # load dataset
+    profile = load_profile(df)
     df_train = sample_dataset(profile, tt)
     dt = fit_zscore(df_train)
-
-    # fit gp hyperparams
-    θ = fit_gp_hyperparams(model, θ0, df_train)
+    dfn = normalize_data(df_train, dt)
 
     # fit rc params
     fi = t -> profile.i(t)
     @mtkbuild rc = RC(; fi)
-
     tspan = (tt[begin], tt[end])
     ode = ODEProblem(rc, [], tspan, [])
+    rc_model = (; ode, rc)
 
-    u = fit_rc_params(rc, ode, model, θ, df_train, dt)
+    # fit gp-ecm hyperparams
+    u = fit_gp_ecm_params(rc_model, gp_model, θ0, dfn, dt)
 
     # build rc model
-    ode = remake(ode; u...)
+    ode = remake(ode; u.rc...)
     sol = solve(ode, Tsit5(); saveat=tt)
     vrc = sol[rc.v1] + sol[rc.v2]
-    v̂rc = StatsBase.transform(dt.σ, vrc)
 
     # build GP model
-    dfs = normalize_data(df_train, dt)
-    x = GPPPInput(:v, RowVecs([dfs.ŝ dfs.î]))
-    v̂ = dfs.v̂
+    df_train[!, :v] = df_train.v - vrc
+    dfn = normalize_data(df_train, dt)
 
+    x = GPPPInput(:v, RowVecs([dfn.ŝ dfn.î]))
+    v̂ = dfn.v̂
+
+    θ = softplus.(u.gp)
     fp = model(θ.kernel)
     fx = fp(x, θ.noise)
-    gp = posterior(fx, v̂ - v̂rc)
+    gp = posterior(fx, v̂)
 
     return (; gp, ode, rc, dt, θ)
 end
 
 function simulate_gp_rc(model, df)
-    gp, ode, rc, dt = model
+    @unpack gp, ode, rc, dt = model
 
     tspan = (df[begin, "t"], df[end, "t"])
     ode = remake(ode; tspan)
@@ -197,39 +159,22 @@ function simulate_gp_rc(model, df)
 end
 
 
-#####
-"SOC dependent R"
-function model(θ)
-    i = x -> x[2]
-    return @gppp let
-        ocv = θ.ocv.σ * GP(with_lengthscale(SEKernel(), θ.ocv.l) ∘ SelectTransform(1))
-        r = θ.r.σ * GP(with_lengthscale(SEKernel(), θ.r.l) ∘ SelectTransform(1))
-        vr = r * i
-        v = ocv + vr
-    end
-end
+###
 
 function fit_gp_series(data)
-    tt = 0:60:(3600*24)
+    tt = 0:60:(3*3600*24)
     θ0 = (;
         kernel=(;
-            ocv=(;
-                σ=positive(1.0),
-                l=positive(1.0)
-            ),
-            r=(;
-                σ=positive(1.0),
-                l=positive(1.0)
-            )
+            ocv=(; σ=1.0, l=1.0),
+            r=(; σ=1.0, l=1.0)
         ),
-        noise=positive(0.001)
+        noise=0.001
     )
 
     res = Dict()
     Threads.@threads for id in collect(eachindex(data))
         df = data[id]
-        profile = load_profile(df)
-        gp = fit_gp_rc(model, θ0, profile, tt)
+        gp = fit_gp_ecm(model, θ0, df, tt)
         res[id] = gp
     end
     return res
