@@ -1,4 +1,4 @@
-function simulate_pulse_resistance_ecm(model, focv; i=3.233, soc=0.5, Δt=9.99)
+function simulate_pulse_resistance_ecm(model, focv; i=1.6166, soc=0.5, Δt=9.99)
     @unpack ode = model
     pulse(t) = i # constant current pulse
     @mtkbuild ecm = ECM(; focv, fi=pulse)
@@ -8,7 +8,7 @@ function simulate_pulse_resistance_ecm(model, focv; i=3.233, soc=0.5, Δt=9.99)
     return Δv / i
 end
 
-function simulate_pulse_resistance_gp(model, df; i=3.233, soc=0.5, Δt=9.99)
+function simulate_pulse_resistance_gp(model, df; i=1.6166, soc=0.5, Δt=9.99)
     @unpack ode, gp, dt = model
 
     # RC
@@ -43,7 +43,9 @@ function benchmark_rint(ecms, gpms, data)
 
     r_ecm = ids .|> id -> simulate_pulse_resistance_ecm(ecms[id], focv) * 1e3
     r_gp = ids .|> id -> simulate_pulse_resistance_gp(gpms[id], data[id]) * 1e3
-    r_cu = ids .|> id -> calc_rint(data[id])[5] * 1e3
+    r_cu_c = ids .|> id -> calc_rint(data[id]; line=49)[5] * 1e3
+    r_cu_d = ids .|> id -> calc_rint(data[id]; line=51)[5] * 1e3
+    r_cu = (r_cu_c .+ r_cu_d) ./ 2
     DataFrame(; id=ids, r_cu, r_ecm, r_gp) # mΩ
 end
 

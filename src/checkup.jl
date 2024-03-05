@@ -108,15 +108,15 @@ function fresh_focv()
 end
 
 ## internal resistance
-function calc_rint(df; timestep=9.99)
+function calc_rint(df; timestep=9.99, line=49, i=1.6166)
     cycles = 9
     timestep = timestep / 3600 # hours -> seconds
 
     # line = 49 # 51
     # i = 4.85 / 3
 
-    line = 53 # 55
-    i = 4.85 * 2 // 3
+    # line = 53 # 55
+    # i = 4.85 * 2 // 3
 
     resistances = Float64[]
     for cycle in 1:cycles
