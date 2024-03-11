@@ -95,7 +95,7 @@ end
 
 
 function fit_ecm_series(data)
-    tt = 0:(24*3600.0)
+    tt = 0:(3*24*3600.0)
     focv = fresh_focv()
     res = Dict()
     Threads.@threads for id in collect(eachindex(data))
