@@ -7,7 +7,7 @@ function ocv_capa_gp(gp_model, df; v=(3.6, 3.8))
     cap = calc_capa_cccv(df)
     cmin, cmax = extrema(df_train.s) # charge
     crange = cmin:0.001:cmax
-    soc0 = inital_soc(df)
+    soc0 = initial_soc(df)
     s = crange .+ soc0 * cap
     v1, v2 = v
 

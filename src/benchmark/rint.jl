@@ -16,7 +16,7 @@ function simulate_pulse_resistance_gp(model, df; i=1.6166, soc=0.5, Δt=9.99)
     @mtkbuild rc = RC(; fi=pulse)
     prob = ODEProblem(rc, [], (0, Δt))
     sol = solve(prob, Tsit5(); p=ode.p, saveat=Δt)
-    Δv = abs(sol[rc.v1][end] + sol[ecm.v2][end])
+    Δv = abs(sol[rc.v1][end] + sol[rc.v2][end])
     r_rc = Δv / i
 
     # rint from GP
