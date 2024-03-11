@@ -27,7 +27,7 @@ end
     @parameters begin
         R1 = 0.5e-3
         τ1 = 60
-        R2 = 0.5e-3
+        R2 = 0.05e-3
         τ2 = 3600
     end
     @variables begin
@@ -96,7 +96,7 @@ function fit_gp_ecm_params(rc_model, gp_model, θ0, df, dt)
         alphaguess=Optim.LineSearches.InitialStatic(; alpha=10),
         linesearch=Optim.LineSearches.BackTracking(),
     )
-    sol = solve(prob, alg; reltol=1e-4, show_trace=true)
+    sol = solve(prob, alg; reltol=1e-4)
     return sol.u
 end
 
@@ -174,8 +174,14 @@ function fit_gp_series(data)
     res = Dict()
     Threads.@threads for id in collect(eachindex(data))
         df = data[id]
-        gp = fit_gp_ecm(model, θ0, df, tt)
-        res[id] = gp
+        try
+            gp = fit_gp_ecm(model, θ0, df, tt)
+            res[id] = gp
+        catch e
+            if isa(e, PosDefException)
+                @warn "$id encountered a numerical instability while fitting. The model will be ommited."
+            end
+        end
     end
     return res
 end
