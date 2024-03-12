@@ -177,6 +177,7 @@ function fit_gp_series(data)
         try
             gp = fit_gp_ecm(model, θ0, df, tt)
             res[id] = gp
+            @info "$id GP-ECM fit complete."
         catch e
             if isa(e, PosDefException)
                 @warn "$id encountered a numerical instability while fitting. The model will be ommited."

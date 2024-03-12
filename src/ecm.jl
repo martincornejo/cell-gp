@@ -101,6 +101,7 @@ function fit_ecm_series(data)
     Threads.@threads for id in collect(eachindex(data))
         df = data[id]
         res[id] = fit_ecm(df, tt, focv) # model
+        @info "$id ECM fit complete."
     end
     return res
 end
