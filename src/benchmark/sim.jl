@@ -32,8 +32,12 @@ function benchmark_simulation(ecms, gpms, data)
 end
 
 function plot_sim(ecm_models, gp_models, data)
-    fig = Figure(size=(1200, 500))
-    ax = [Axis(fig[i, 1]) for i in 1:3]
+    # fig = Figure(size=(1200, 500), fontsize=20)
+    # fig = Figure(size=(1000, 400))
+    fig = Figure(size=(800, 320))
+    gl = GridLayout(fig[1, 1])
+    ax = [Axis(gl[i, 1]) for i in 1:3]
+    rowgap!(gl, 5)
     ax[1].title = "Measured"
     ax[2].title = "Error ECM"
     ax[3].title = "Error GP-ECM"
@@ -50,17 +54,32 @@ function plot_sim(ecm_models, gp_models, data)
     ax[1].xticks = 0:12:(7*24)
     ax[2].xticks = 0:12:(7*24)
     ax[3].xticks = 0:12:(7*24)
-    ax[1].ylabel = "Voltage (V)"
-    ax[2].ylabel = "Voltage (mV)"
-    ax[3].ylabel = "Voltage (mV)"
-    ax[3].xlabel = "Time (h)"
+    ax[1].yticks = [3.4, 3.8, 4.2]
+    ax[2].yticks = [-50, 0, 50]
+    ax[3].yticks = [-50, 0, 50]
+    ax[1].yminorticks = [3.2, 3.6, 4.0]
+    ax[2].yminorticks = [-75, -25, 25, 75]
+    ax[3].yminorticks = [-75, -25, 25, 75]
+    ax[1].yminorticksvisible = true
+    ax[2].yminorticksvisible = true
+    ax[3].yminorticksvisible = true
+    ax[1].yminorgridvisible = true
+    ax[2].yminorgridvisible = true
+    ax[3].yminorgridvisible = true
+    ax[1].ylabel = "Voltage / V"
+    ax[2].ylabel = "Error / mV"
+    ax[3].ylabel = "Error / mV"
+    ax[3].xlabel = "Time / h"
 
     hidexdecorations!(ax[1], ticks=false, grid=false)
     hidexdecorations!(ax[2], ticks=false, grid=false)
 
+    for axis in ax
+        vlines!(axis, 72, color=:gray, linestyle=:dashdot)
+    end
+
     colormap = :dense
     colorrange = (0.6, 1.0)
-
 
     ids = collect(keys(data))[sortperm([calc_capa_cccv(df) / 4.9 for df in values(data)])]
     for id in ids
@@ -93,6 +112,6 @@ function plot_sim(ecm_models, gp_models, data)
     end
 
     linkxaxes!(ax...)
-    Colorbar(fig[:, 2]; colorrange, colormap, label="SOH")
+    Colorbar(fig[:, 2]; colorrange, colormap, label="SOH / p.u.")
     return fig
 end
