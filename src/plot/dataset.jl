@@ -2,8 +2,8 @@ function plot_checkup_profile(df)
     # fig = Figure(size=(600, 200), fontsize=11, figure_padding=5)
     fig = Figure(size=(1000, 300))
     gl = GridLayout(fig[1, 1])
-    ax1 = Axis(gl[1, 1]; ylabel="Voltage (V)")
-    ax2 = Axis(gl[2, 1]; ylabel="Current (A)", xlabel="Time (h)")
+    ax1 = Axis(gl[1, 1]; ylabel="Voltage / V")
+    ax2 = Axis(gl[2, 1]; ylabel="Current / A", xlabel="Time / h")
 
     lines!(ax1, df[:, "Time[h]"], df[:, "U[V]"], color=Cycled(1))
     lines!(ax2, df[:, "Time[h]"], df[:, "I[A]"], color=Cycled(2))
@@ -26,9 +26,9 @@ function plot_ocvs(data)
     colormap = :dense
     colorrange = (0.6, 1.0)
 
-    Colorbar(gl[1, 1]; colorrange, colormap, label="SOH", vertical=false) #, flipaxis=false)
-    ax1 = Axis(gl[2, 1]; ylabel="OCV (V)") # mean pOCV
-    ax2 = Axis(gl[3, 1]; xlabel="SOC", ylabel="δV (mV)")
+    Colorbar(gl[1, 1]; colorrange, colormap, label="SOH / p.u.", vertical=false) #, flipaxis=false)
+    ax1 = Axis(gl[2, 1]; ylabel="OCV / V") # mean pOCV
+    ax2 = Axis(gl[3, 1]; xlabel="SOC / p.u.", ylabel="δOCV / mV")
     rowgap!(gl, 6)
 
     focv = fresh_focv()
@@ -59,8 +59,8 @@ function plot_rints(data; timestep=9.99)
     colorrange = (0.6, 1.0)
 
     fig = Figure(size=(359, 350), fontsize=11)
-    ax = Axis(fig[1, 1]; xlabel="SOC", ylabel="Resistance (mΩ)")
-    Colorbar(fig[1, 2]; colorrange, colormap, label="SOH")
+    ax = Axis(fig[1, 1]; xlabel="SOC / p.u.", ylabel="Pulse resistance / mΩ")
+    Colorbar(fig[1, 2]; colorrange, colormap, label="SOH / p.u.")
 
     for (id, df) in data
         soh = calc_capa_cccv(df) / 4.9

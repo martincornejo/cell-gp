@@ -10,8 +10,8 @@ function plot_ocv_fit(ecms, gpms, data, ids; correct_soc=true)
 
         ax1 = Axis(fig[1, i])
         ax2 = Axis(fig[1, i], yaxisposition=:right)
-        ax1.ylabel = "Voltage (V)"
-        ax1.xlabel = "SOC (Ah)"
+        ax1.ylabel = "Voltage / V"
+        ax1.xlabel = "Capacity / Ah"
         ylims!(ax1, 3.3, 4.3)
         ylims!(ax2, 0, 1e3)
 
@@ -77,8 +77,8 @@ function plot_ocv_fit(ecms, gpms, data, ids; correct_soc=true)
 end
 
 function plot_rint_fit(df)
-    fig = Figure()
-    ax = Axis(fig[1, 1], xlabel="Measured pulse resistance (mΩ)", ylabel="Estimated pulse resistance (mΩ)")
+    fig = Figure(size=(350, 350))
+    ax = Axis(fig[1, 1], xlabel="Measured pulse resistance / mΩ", ylabel="Estimated pulse resistance / mΩ")
     ylims!(ax, 18, 95)
     xlims!(ax, 18, 95)
     ablines!(ax, 0, 1, linestyle=:dashdot, color=:black)
@@ -92,6 +92,14 @@ function plot_rint_fit(df)
     scatter!(ax, df.r_cu, μ, label="GP-ECM")
     errorbars!(ax, df.r_cu, μ, 2σ; label="GP-ECM", whiskerwidth=5, color=Makie.wong_colors()[2])
 
+    # text = rich(
+    #     rich("Pulse conditions:", font=:bold), "\n",
+    #     "SOC = 50 %", "\n",
+    #     "t = 10 s", "\n",
+    #     "i = C/3",
+    # )
+    # text!(ax, 26, 91; text, align=(:left, :top))
+
     axislegend(ax; merge=true, position=:rb)
     fig
 end
@@ -99,7 +107,7 @@ end
 
 function plot_soh_fit(df)
     fig = Figure()
-    ax = Axis(fig[1, 1], xlabel="Check-up SOH (%)", ylabel="Estimated SOH (%)")
+    ax = Axis(fig[1, 1], xlabel="Check-up SOH / %", ylabel="Estimated SOH / %")
     ablines!(ax, 0, 1, linestyle=:dashdot, color=:black)
 
     # ECM
