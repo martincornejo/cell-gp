@@ -5,7 +5,7 @@
         D = Differential(t)
     end
     @parameters begin
-        Q = 4.85
+        Q = 4.8
         R0 = 0.5e-3
         R1 = 0.5e-3
         τ1 = 60
@@ -69,18 +69,14 @@ function fit_ecm(df, tt, focv) # input only data instead?
     loss = build_loss_function(ode, ecm, df_train) # loss function
     optf = OptimizationFunction((u, p) -> loss(u), adtype)
     opt = OptimizationProblem(optf, p0)
-    alg = LBFGS(;
-        alphaguess=Optim.LineSearches.InitialStatic(; alpha=10),
-        linesearch=Optim.LineSearches.BackTracking(),
-    )
 
     # optimize with multiple initial values, select best fit
     solutions = []
-    for Q in (4.9, 4.4, 3.9, 3.4) # alpha in (1, 10, 100, 1000)
+    for Q in (4.8, 4.4, 4.0, 3.6)
         p0.p[1] = Q
         opt = remake(opt; p=p0)
 
-        sol = solve(opt, alg; reltol=1e-4)
+        sol = solve(opt, LBFGS(); reltol=1e-4)
         if sol.retcode == ReturnCode.Success
             push!(solutions, sol)
         end
