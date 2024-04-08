@@ -32,9 +32,7 @@ function benchmark_simulation(ecms, gpms, data)
 end
 
 function plot_sim(ecm_models, gp_models, data)
-    # fig = Figure(size=(1200, 500), fontsize=20)
-    # fig = Figure(size=(1000, 400))
-    fig = Figure(size=(800, 320))
+    fig = Figure(size=(512, 250), fontsize=10, figure_padding=5)
     gl = GridLayout(fig[1, 1])
     ax = [Axis(gl[i, 1]) for i in 1:3]
     rowgap!(gl, 5)

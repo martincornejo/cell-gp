@@ -77,7 +77,7 @@ function plot_ocv_fit(ecms, gpms, data, ids; correct_soc=true)
 end
 
 function plot_rint_fit(df)
-    fig = Figure(size=(350, 350))
+    fig = Figure(size=(252, 252), fontsize=10, figure_padding=5)
     ax = Axis(fig[1, 1], xlabel="Measured pulse resistance / mΩ", ylabel="Estimated pulse resistance / mΩ")
     ylims!(ax, 18, 95)
     xlims!(ax, 18, 95)
