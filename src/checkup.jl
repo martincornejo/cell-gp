@@ -38,6 +38,7 @@ end
 
 ## capacity
 function calc_capa_cccv(df; line=(21, 22))
+    # cc: constant current / cv: constant voltage
     cc, cv = line
 
     df_cc = filter(:Line => ∈(cc), df)
@@ -54,6 +55,12 @@ function calc_capa_cc(df; line=21)
     return cap_cc
 end
 
+function sort_cell_ids(data)
+    # sort cell-id by soh
+    soh = [calc_capa_cccv(df) for df in values(data)]
+    ids = collect(keys(data))[sortperm(soh; rev=true)]
+    return ids
+end
 
 ## OCV
 function calc_cocv(df)
@@ -131,20 +138,36 @@ function calc_rint(df; timestep=9.99, line=49, i=1.6166)
         idx2 = findfirst(>(init_time + timestep), df[:, "Time[h]"])
         voltage = df[idx2, "U[V]"]
 
-        r = abs(voltage - init_voltage) / i
+        r = abs(voltage - init_voltage) / i * 1e3 # mΩ
         append!(resistances, r)
     end
-    return resistances
+    return DataFrame(; soc=0.1:0.1:0.9, r=reverse(resistances))
 end
 
 
 ## profile
+function calc_ibias(df)
+    # integrate current profile
+    dt = diff(df.t)
+    q = cumsum(df[1:end-1, "I[A]"] .* dt) / 3600 # integrated capacity
+    pushfirst!(q, 0) # start from 0.0
+
+    # compare to CTS coulomb counter
+    Δq = df[end, "Ah-Step"] - q[end] # capacity diff
+    Δt = df.t[end] / 3600
+    ib = Δq / Δt
+    return ib
+end
+
 function load_profile(df)
     df = filter(:Line => ∈(35), df)
-
     df[:, :t] = (df[:, "Time[h]"] .- df[begin, "Time[h]"]) * 3600 # hours -> seconds
 
-    i = ConstantInterpolation(df[:, "I[A]"], df.t)
+    # bias current / correct current integration
+    ibias = calc_ibias(df)
+
+    # interpolation functions
+    i = ConstantInterpolation(df[:, "I[A]"] .+ ibias, df.t)
     v = ConstantInterpolation(df[:, "U[V]"], df.t)
     s = ConstantInterpolation(df[:, "Ah-Step"], df.t)
     T = ConstantInterpolation(df[:, "T1[°C]"], df.t)
@@ -163,6 +186,8 @@ function sample_dataset(data, tt)
 end
 
 function initial_soc(df)
+    # inital SOC was defined in test as 38% of CC capacity
+    # -> convert CC capacity to CCCV capacity based SOC
     capa_cccv = calc_capa_cccv(df)
     capa_cc = calc_capa_cc(df)
     return capa_cc / capa_cccv * 0.38
