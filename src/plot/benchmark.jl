@@ -1,19 +1,21 @@
 
 function plot_ocv_fit(ecms, gpms, data, ids; correct_soc=true)
-    n = length(ids)
-    fig = Figure(size=(400 * n, 400))
+    fig = Figure(size=(512, 700), fontsize=10, figure_padding=5)
+    gl = [GridLayout(fig[ci[2], ci[1]]) for ci in CartesianIndices((1:2, 1:5))]
 
     for (i, id) in enumerate(ids)
         df = data[id]
         ecm = ecms[id]
         gpm = gpms[id]
 
-        ax1 = Axis(fig[1, i])
-        ax2 = Axis(fig[1, i], yaxisposition=:right)
+        ax1 = Axis(gl[i][1, 1])
+        ax2 = Axis(gl[i][1, 1], yaxisposition=:right)
         ax1.ylabel = "Voltage / V"
         ax1.xlabel = "Capacity / Ah"
         ylims!(ax1, 3.3, 4.3)
         ylims!(ax2, 0, 1e3)
+        xlims!(ax1, 0, 5)
+        xlims!(ax2, 0, 5)
 
         ## ECM
         # function ocv(ecm, df)
@@ -38,9 +40,6 @@ function plot_ocv_fit(ecms, gpms, data, ids; correct_soc=true)
         ocv2 = focv(s)
         ln2 = lines!(ax1, c2, ocv2; label="ECM")
 
-        soh = round(cap_real / 4.9 * 100; digits=2)
-        ax1.title = "ID:$id SOH: $soh %"
-
         ## GP
         @unpack gp, dt = gpm
         ŝ = StatsBase.transform(dt.s, (s .- soc0) * cap_real)
@@ -57,22 +56,38 @@ function plot_ocv_fit(ecms, gpms, data, ids; correct_soc=true)
         df_train = sample_dataset(profile, tt)
 
         hst = hist!(ax2, df_train.s .+ soc0 * cap_real, color=(:gray, 0.3), label="SOC")
-        hideydecorations!(ax2)
-        # axislegend(ax1; position=:rb, merge=true)
-        # axislegend(ax2; position=:lt)
-        if i == n
-            Legend(fig[2, :],
+        smin, smax = extrema(df_train.s) .+ soc0 * cap_real
+        vlines!(ax1, [smin, smax], color=:gray, linestyle=:dashdot)
+        hidedecorations!(ax2)
+        hidespines!(ax2)
+
+        # hide ticklabels
+        if i % 2 == 0
+            hideydecorations!(ax1, ticks=false, grid=false)
+        end
+        if i ∉ (9, 10)
+            hidexdecorations!(ax1, ticks=false, grid=false)
+        end
+
+        # legend
+        if i == 10
+            Legend(fig[6, :],
                 [hst, ln1, ln2, [ln3, bnd]],
-                ["SOC distribution in the training dataset", "Measured pOCV", "ECM fitted OCV", "GP-ECM fitted OCV"],
-                orientation=:horizontal, tellwidth=false, tellheight=true
+                ["SOC distribution in \nthe training dataset", "Measured pOCV", "ECM OCV", "GP-ECM OCV"],
+                orientation=:horizontal, tellwidth=false, tellheight=true,
+                nbanks=1,
             )
         end
 
-        smin, smax = extrema(df_train.s) .+ soc0 * cap_real
-        vlines!(ax1, [smin, smax], color=:gray, linestyle=:dashdot)
+        # text box
+        soh = round(cap_real / 4.85 * 100; digits=1)
+        text = "Cell $i \nSOH: $soh %"
+        poly!(ax1, Rect(0.1, 3.95, 1.5, 0.29), color=:white, strokecolor=:black, strokewidth=1)
+        text!(ax1, 0.15, 4.2; text, font=:bold, align=(:left, :top))
 
         linkxaxes!(ax1, ax2)
     end
+
     fig
 end
 
