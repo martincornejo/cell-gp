@@ -18,16 +18,15 @@ function normalize_data(df, dt)
 end
 
 ## GP-ECM model
-# RCM model
 @mtkmodel RC begin
     begin
         @variables t
         D = Differential(t)
     end
     @parameters begin
-        R1 = 0.5e-3
+        R1 = 1e-3
         τ1 = 60
-        R2 = 0.05e-3
+        R2 = 1e-3
         τ2 = 3600
     end
     @variables begin
@@ -39,14 +38,14 @@ end
         fi
     end
     @equations begin
-        D(v1) ~ -v1 / τ1 + i * (R1 / τ1) # check sign
-        D(v2) ~ -v2 / τ2 + i * (R2 / τ2) # check sign
+        D(v1) ~ -v1 / τ1 + i * (R1 / τ1)
+        D(v2) ~ -v2 / τ2 + i * (R2 / τ2)
         i ~ fi(t)
     end
 end
 
 # GP model
-"SOC dependent R"
+"1st-oder ECM, with R0(SOC)"
 function model(θ)
     i = x -> x[2]
     return @gppp let
@@ -58,18 +57,17 @@ function model(θ)
 end
 
 function build_nlml(rc_model, gp_model, x, v̂, t, dt)
-    return loss(ϑ) = begin
+    return loss(p) = begin
         @unpack ode, rc = rc_model
-        @unpack u0, p = ϑ.rc
 
         # RC
-        prob = remake(ode; u0, p)
+        prob = remake(ode; p=p.rc.p, u0=p.rc.u0)
         sol = solve(prob, Tsit5(); saveat=t)
         vrc = sol[rc.v1] + sol[rc.v2]
         v̂rc = StatsBase.transform(dt.σ, vrc) # normalized RC-voltage drop
 
         # GP
-        θ = softplus.(ϑ.gp) # transform to ensure parameters are positive
+        θ = softplus.(p.gp) # transform to ensure parameters are positive
         fp = gp_model(θ.kernel)
         fx = fp(x, θ.noise) # finite gp
         -logpdf(fx, v̂ - v̂rc)
@@ -92,10 +90,7 @@ function fit_gp_ecm_params(rc_model, gp_model, θ0, df, dt)
     adtype = AutoForwardDiff()
     f = OptimizationFunction((u, p) -> loss(u), adtype)
     prob = OptimizationProblem(f, p0)
-    alg = LBFGS(;
-        alphaguess=Optim.LineSearches.InitialStatic(; alpha=10),
-        linesearch=Optim.LineSearches.BackTracking(),
-    )
+    alg = LBFGS(linesearch=BackTracking())
     sol = solve(prob, alg; reltol=1e-4)
     return sol.u
 end
@@ -122,7 +117,7 @@ function fit_gp_ecm(gp_model, θ0, df, tt)
     sol = solve(ode, Tsit5(); saveat=tt)
     vrc = sol[rc.v1] + sol[rc.v2]
 
-    # build GP model
+    # build parametrized GP model
     df_train[!, :v] = df_train.v - vrc
     dfn = normalize_data(df_train, dt)
 
@@ -160,7 +155,6 @@ end
 
 
 ###
-
 function fit_gp_series(data)
     tt = 0:60:(3*3600*24)
     θ0 = (;
