@@ -91,50 +91,81 @@ function plot_ocv_fit(ecms, gpms, data, ids; correct_soc=true)
     fig
 end
 
-function plot_rint_fit(df)
-    fig = Figure(size=(252, 252), fontsize=10, figure_padding=5)
-    ax = Axis(fig[1, 1], xlabel="Measured pulse resistance / mΩ", ylabel="Estimated pulse resistance / mΩ")
-    ylims!(ax, 18, 95)
-    xlims!(ax, 18, 95)
+function plot_rint_fit(ecms, gpms, data)
+    fig = Figure(size=(252, 280), fontsize=10, figure_padding=7)
+    gl = GridLayout(fig[1, 1])
+
+    ## colorbars
+    cmap_ecm = ColorSchemes.Blues
+    cmap_gpm = ColorSchemes.Oranges
+    colorrange = (0.0, 1.0)
+
+    Colorbar(gl[1, 1]; vertical=false, colorrange, colormap=cmap_ecm, label="SOC / p.u.")
+    Colorbar(gl[2, 1]; vertical=false, colorrange, colormap=cmap_gpm, ticksvisible=false, ticklabelsvisible=false)
+
+    ## scatter
+    ax = Axis(gl[3, 1],
+        xlabel="Measured pulse resistance / mΩ",
+        ylabel="Estimated pulse resistance / mΩ"
+    )
+    ylims!(ax, 16, 115)
+    xlims!(ax, 16, 115)
     ablines!(ax, 0, 1, linestyle=:dashdot, color=:black)
+    ablines!(ax, 0, 1.1, linestyle=:dashdot, color=:gray)
+    ablines!(ax, 0, 0.9, linestyle=:dashdot, color=:gray)
+    # ablines!(ax, 0, 1.05, linestyle=:dashdot, color=:gray)
+    # ablines!(ax, 0, 0.95, linestyle=:dashdot, color=:gray)
 
-    # ECM
-    scatter!(ax, df.r_cu, df.r_ecm, label="ECM")
+    focv = fresh_focv()
+    socs = 0.3:0.1:0.7
+    ids = sort_cell_ids(data)
 
-    # ECM-GP
-    μ = Measurements.value.(df.r_gp)
-    σ = Measurements.uncertainty.(df.r_gp)
-    scatter!(ax, df.r_cu, μ, label="GP-ECM")
-    errorbars!(ax, df.r_cu, μ, 2σ; label="GP-ECM", whiskerwidth=5, color=Makie.wong_colors()[2])
+    # checkup
+    df_cup = DataFrame(; soc=0.1:0.1:0.9)
+    for id in ids
+        df_id = calc_rint(data[id])
+        df_cup[!, id] .= df_id.r
+    end
+    filter!(:soc => ∈(socs), df_cup)
 
-    # text = rich(
-    #     rich("Pulse conditions:", font=:bold), "\n",
-    #     "SOC = 50 %", "\n",
-    #     "t = 10 s", "\n",
-    #     "i = C/3",
-    # )
-    # text!(ax, 26, 91; text, align=(:left, :top))
+    # ecm
+    df_ecm = DataFrame(; soc=socs)
+    for id in ids
+        df_id = [simulate_pulse_resistance_ecm(ecms[id], focv; soc) for soc in socs]
+        df_ecm[!, id] .= df_id
+    end
 
-    axislegend(ax; merge=true, position=:rb)
-    fig
-end
+    # gp-ecm
+    df_gpm = DataFrame(; soc=socs)
+    for id in ids
+        df_id = [simulate_pulse_resistance_gpm(gpms[id], data[id]; soc) for soc in socs]
+        df_gpm[!, id] .= df_id
+    end
 
+    # plot
+    for (i, soc) in enumerate(socs)
+        # df
+        r_cup = df_cup[i, ids] |> Array |> vec
+        r_ecm = df_ecm[i, ids] |> Array |> vec
+        r_gpm = df_gpm[i, ids] |> Array |> vec
 
-function plot_soh_fit(df)
-    fig = Figure()
-    ax = Axis(fig[1, 1], xlabel="Check-up SOH / %", ylabel="Estimated SOH / %")
-    ablines!(ax, 0, 1, linestyle=:dashdot, color=:black)
+        # ecm
+        color = get(cmap_ecm, soc)
+        sc1 = scatter!(ax, r_cup, r_ecm; color)
 
-    # ECM
-    scatter!(ax, df.soh_cu, df.soh_ecm, label="ECM")
+        # gp-ecm
+        color = get(cmap_gpm, soc)
+        μ = Measurements.value.(r_gpm)
+        σ = Measurements.uncertainty.(r_gpm)
+        sc2 = scatter!(ax, r_cup, μ; color)
+        err = errorbars!(ax, r_cup, μ, 2σ; color, whiskerwidth=5)
 
-    # ECM-GP
-    μ = Measurements.value.(df.soh_ocv_gp)
-    σ = Measurements.uncertainty.(df.soh_ocv_gp)
-    scatter!(ax, df.soh_cu, μ, label="GP-ECM")
-    errorbars!(ax, df.soh_cu, μ, 2σ; label="GP-ECM", whiskerwidth=5, color=Makie.wong_colors()[2])
-    # scatter!(ax, df.soh_cu, df.soh_ocv_ecm, label="ECM-OCV")
+        # legend
+        if soc == 0.6
+            axislegend(ax, [sc1, [sc2, err]], ["ECM", "GP-ECM"], position=:lt)
+        end
+    end
 
-    axislegend(ax; merge=true, position=:rb)
+    rowgap!(gl, 5)
     fig
 end
