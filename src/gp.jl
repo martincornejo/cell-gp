@@ -45,11 +45,17 @@ end
 end
 
 # GP model
-"1st-oder ECM, with R0(SOC)"
-function model(θ)
+"0th-oder ECM, with R0(SOC)"
+function gp_ecm0(θ)
+    # inputs:
+    # 1: q
+    # 2: i
     i = x -> x[2]
     return @gppp let
-        ocv = θ.ocv.σ * GP(with_lengthscale(SEKernel(), θ.ocv.l) ∘ SelectTransform(1))
+        ocv = GP(
+            LinearKernel() ∘ SelectTransform(1) +
+            θ.ocv.σ * with_lengthscale(SEKernel(), θ.ocv.l) ∘ SelectTransform(1)
+        )
         r = θ.r.σ * GP(with_lengthscale(SEKernel(), θ.r.l) ∘ SelectTransform(1))
         vr = r * i
         v = ocv + vr
@@ -58,7 +64,7 @@ end
 
 function build_nlml(rc_model, gp_model, x, v̂, t, dt)
     return loss(p) = begin
-        @unpack ode, rc = rc_model
+        (; ode, rc) = rc_model
 
         # RC
         prob = remake(ode; p=p.rc.p, u0=p.rc.u0)
@@ -125,7 +131,7 @@ function fit_gp_ecm(gp_model, θ0, df, tt)
     v̂ = dfn.v̂
 
     θ = softplus.(u.gp)
-    fp = model(θ.kernel)
+    fp = gp_model(θ.kernel)
     fx = fp(x, θ.noise)
     gp = posterior(fx, v̂)
 
@@ -133,7 +139,7 @@ function fit_gp_ecm(gp_model, θ0, df, tt)
 end
 
 function simulate_gp_rc(model, df)
-    @unpack gp, ode, rc, dt = model
+    (; gp, ode, rc, dt) = model
 
     tspan = (df[begin, "t"], df[end, "t"])
     ode = remake(ode; tspan)
@@ -155,11 +161,11 @@ end
 
 
 ###
-function fit_gp_series(data)
+function fit_gpm_series(data)
     tt = 0:60:(3*3600*24)
     θ0 = (;
         kernel=(;
-            ocv=(; σ=1.0, l=1.0),
+            ocv=(; σ=0.5, l=0.5),
             r=(; σ=1.0, l=1.0)
         ),
         noise=0.001
@@ -169,7 +175,7 @@ function fit_gp_series(data)
     Threads.@threads for id in collect(eachindex(data))
         df = data[id]
         try
-            gp = fit_gp_ecm(model, θ0, df, tt)
+            gp = fit_gp_ecm(gp_ecm0, θ0, df, tt)
             res[id] = gp
             @info "$id GP-ECM fit complete."
         catch e
