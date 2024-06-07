@@ -89,6 +89,50 @@ function plot_ocv_fit(ecms, gpms, data)
     fig
 end
 
+function plot_gp_rint(gpms, data)
+    fig = Figure(size=(252, 252), fontsize=10, figure_padding=7)
+    gl = GridLayout(fig[1, 1])
+
+    colormap = ColorSchemes.dense
+    colorrange = (0.6, 1.0)
+    Colorbar(gl[1, 1]; vertical=false, colorrange, colormap, label="SOH / p.u.")
+
+    ax = Axis(gl[2, 1])
+    ax.xlabel = "SOC / p.u."
+    ax.ylabel = "R₀ / mΩ"
+    xlims!(ax, (0.2, 0.75))
+    ylims!(ax, (12, 115))
+
+    ids = sort_cell_ids(data)
+    for id in ids
+        df = data[id]
+        gpm = gpms[id]
+        (; gp, dt) = gpm
+
+        soc0 = initial_soc(df)
+        cap = calc_capa_cccv(df)
+        soh = cap / 4.9
+        color = get(colormap, soh, (0.6, 1.0))
+
+        # R0
+        s = 0.2:0.01:0.75
+        ŝ = StatsBase.transform(dt.s, (s .- soc0) * cap)
+        i = zeros(size(s))
+        x = GPPPInput(:r, RowVecs([ŝ i]))
+        r0 = 1e3 * dt.σ.scale[1] / dt.i.scale[1] # scale to mΩ
+
+        r = gp(x)
+        rμ = mean(r) * r0
+        rσ = sqrt.(var(r)) * r0
+
+        lines!(ax, s, rμ; color)
+        band!(ax, s, rμ - 2rσ, rμ + 2rσ; color=(color, 0.5))
+    end
+
+    rowgap!(gl, 5)
+    return fig
+end
+
 function plot_rint_fit(ecms, gpms, data)
     fig = Figure(size=(252, 280), fontsize=10, figure_padding=7)
     gl = GridLayout(fig[1, 1])
