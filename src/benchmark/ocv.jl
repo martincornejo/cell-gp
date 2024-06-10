@@ -15,7 +15,7 @@ function analyze_ocv_gp(model, df)
     ocv_meas = pocv(srange)
 
     # gp
-    @unpack gp, dt = model
+    (; gp, dt) = model
     ŝ = StatsBase.transform(dt.s, crange)
     i = zero.(ŝ)
     x = GPPPInput(:ocv, RowVecs([ŝ i]))
@@ -31,7 +31,7 @@ function analyze_ocv_gp(model, df)
 end
 
 function analyze_ocv_ecm(ecm, df; correct_soc=true)
-    @unpack ode = ecm
+    (; ode) = ecm
     profile = load_profile(df)
     tt = 0:60:(24*2600)
     df_train = sample_dataset(profile, tt)
@@ -71,8 +71,7 @@ function analyze_ocv_ecm(ecm, df; correct_soc=true)
 end
 
 function benchmark_ocv(ecms, gpms, data)
-    sohs = [calc_capa_cccv(df) / 4.9 for df in values(data)]
-    ids = collect(keys(data))[sortperm(sohs)] # sort cell-id by soh
+    ids = sort_cell_ids(data)
 
     ecm_ocv = ids .|> id -> analyze_ocv_ecm(ecms[id], data[id])
     ecm_mae = ecm_ocv .|> first

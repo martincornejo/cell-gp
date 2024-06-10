@@ -11,7 +11,7 @@ function ocv_capa_gp(gp_model, df; v=(3.6, 3.8))
     s = crange .+ soc0 * cap
     v1, v2 = v
 
-    @unpack gp, dt = gp_model
+    (; gp, dt) = gp_model
     ŝ = StatsBase.transform(dt.s, crange)
     i = zero.(ŝ)
     x = GPPPInput(:ocv, RowVecs([ŝ i]))
@@ -54,9 +54,7 @@ function benchmark_soh(ecms, gpms, data; v=(3.6, 3.8))
     invf = ConstantInterpolation((0:0.01:1) .* 4.9, focv(0:0.01:1))
     soh0 = invf(v2) - invf(v1)
 
-    sohs = [calc_capa_cccv(df) / 4.9 for df in values(data)]
-    ids = collect(keys(data))[sortperm(sohs)] # sort cell-id by soh
-
+    ids = sort_cell_ids(data)
     soh_cu = ids .|> id -> calc_capa_cccv(data[id]) / 4.9
     soh_ocv_gp = ids .|> id -> ocv_capa_gp(gpms[id], data[id]; v) / soh0
     soh_ocv_ecm = ids .|> id -> ocv_capa_ecm(ecms[id], data[id], focv; v) / soh0

@@ -1,5 +1,5 @@
 function simulate_pulse_resistance_ecm(model, focv; i=1.6166, soc=0.5, Δt=9.99)
-    @unpack ode = model
+    (; ode) = model
     pulse(t) = i # constant current pulse
     @mtkbuild ecm = ECM(; focv, fi=pulse)
     prob = ODEProblem(ecm, [ecm.soc => soc], (0, Δt))
@@ -9,7 +9,7 @@ function simulate_pulse_resistance_ecm(model, focv; i=1.6166, soc=0.5, Δt=9.99)
 end
 
 function simulate_pulse_resistance_gpm(model, df; i=1.6166, soc=0.5, Δt=9.99)
-    @unpack ode, gp, dt = model
+    (; ode, gp, dt) = model
 
     # RC
     pulse(t) = i # constant current pulse
