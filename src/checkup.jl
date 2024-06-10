@@ -145,6 +145,41 @@ function calc_rint(df; timestep=9.99, line=49, i=1.6166)
 end
 
 
+# check-up analysis (table)
+function summarize_checkups(data)
+    ids = sort_cell_ids(data)
+
+    # SOH
+    cap = [calc_capa_cccv(data[id]) for id in ids]
+    soh = cap ./ 4.9
+
+    # RDC (50% SOC)
+    df_rint = DataFrame(; soc=0.1:0.1:0.9)
+    for id in ids
+        df_id = calc_rint(data[id])
+        df_rint[!, id] .= df_id.r
+    end
+    filter!(:soc => ==(0.5), df_rint)
+    select!(df_rint, Not(:soc))
+    rdc = df_rint |> Array |> vec
+
+    # ΔOCV MAE
+    focv = fresh_focv()
+    soc = 0:0.001:1.0
+    ocv_mae = map(ids) do id
+        pocv = calc_pocv(data[id])
+        δv = (pocv(soc) - focv(soc)) * 1e3 # mV
+        mean(abs, δv)
+    end
+
+    cap = round.(cap, digits=2)
+    soh = round.(soh * 100, digits=1)
+    rdc = round.(rdc, digits=1)
+    ocv_mae = round.(ocv_mae, digits=1)
+    DataFrame(; id=ids, cap, soh, rdc, ocv_mae)
+end
+
+
 ## profile
 function calc_ibias(df)
     # integrate current profile
