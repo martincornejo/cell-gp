@@ -1,4 +1,4 @@
-function plot_sim(ecm_models, gp_models, data)
+function plot_sim(ecms, gpms, data)
     fig = Figure(size=(512, 250), fontsize=10, figure_padding=5)
     gl = GridLayout(fig[1, 1])
     ax = [Axis(gl[i, 1]) for i in 1:3]
@@ -46,34 +46,21 @@ function plot_sim(ecm_models, gp_models, data)
     colormap = :dense
     colorrange = (0.6, 1.0)
 
-    ids = collect(keys(data))[sortperm([calc_capa_cccv(df) / 4.9 for df in values(data)])]
-    for id in ids
+    ids = sort_cell_ids(data)
+    sim = simulation_voltage(ecms, gpms, data)
+
+    for id in reverse(ids)
         # SOH
         df = data[id]
         soh = calc_capa_cccv(df) / 4.9
 
-        # real voltage
-        profile = load_profile(df)
-        df_test = sample_dataset(profile, tt)
-        v̄ = df_test.v
-        t = df_test.t ./ 3600
-
-        # ECM
-        @unpack ecm, ode = ecm_models[id]
-        ode = remake(ode; tspan)
-        sol = solve(ode, Tsit5(); saveat=tt)
-        v = sol[ecm.v]
-        δv_ecm = (v - v̄) * 1e3
-
-        # GP-ECM
-        gp = gp_models[id]
-        v = simulate_gp_rc(gp, df_test)
-        δv_gp = (v.μ - v̄) * 1e3
+        # simulation results
+        (; t, v̄, δv_ecm, δv_gp) = sim[id]
 
         # plot
-        lines!(ax[1], t, v̄; color=soh, colorrange, colormap)
-        lines!(ax[2], t, δv_ecm; color=soh, colorrange, colormap)
-        lines!(ax[3], t, δv_gp; color=soh, colorrange, colormap)
+        lines!(ax[1], t / 3600, v̄; color=soh, colorrange, colormap)
+        lines!(ax[2], t / 3600, δv_ecm; color=soh, colorrange, colormap)
+        lines!(ax[3], t / 3600, δv_gp; color=soh, colorrange, colormap)
     end
 
     linkxaxes!(ax...)

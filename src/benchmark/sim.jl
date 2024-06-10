@@ -2,7 +2,7 @@ function simulation_voltage(ecms, gpms, data)
     # time-span
     tt = 0:60:(6.9*24*3600)
 
-    res = Dict()
+    sim = Dict()
     ids = sort_cell_ids(data)
     for id in ids
         df = data[id]
@@ -12,52 +12,54 @@ function simulation_voltage(ecms, gpms, data)
         # real voltage
         profile = load_profile(df)
         df_test = sample_dataset(profile, tt)
-        v = df_test.v
+        v̄ = df_test.v
 
         # ECM
         (; ecm, ode) = ecm_model
         ode = remake(ode; tspan=(tt[begin], tt[end]))
         sol = solve(ode, Tsit5(); saveat=tt)
         v_ecm = sol[ecm.v]
+        δv_ecm = (v_ecm - v̄) * 1e3 # V -> mV
 
         # GP-ECM
         v_gp = simulate_gp_rc(gp_model, df_test)
-        v_gpμ = v_gp.μ
-        v_gpσ = v_gp.σ
-        res[id] = DataFrame(; v, v_ecm, v_gpμ, v_gpσ)
+        σv_gp = v_gp.σ * 1e3 # V -> mV
+        δv_gp = (v_gp.μ - v̄) * 1e3 # V -> mV
+
+        # output
+        sim[id] = DataFrame(; t=df_test.t, v̄, δv_ecm, δv_gp, σv_gp)
     end
 
-    return res
+    return sim
 end
 
-
-function simulation_error(ecm_model, gp_model, df)
-    # time-span
-    tt = 0:60:(6.9*24*3600)
-
-    # real voltage
-    profile = load_profile(df)
-    df_test = sample_dataset(profile, tt)
-    v̄ = df_test.v
-
-    # ECM
-    (; ecm, ode) = ecm_model
-    ode = remake(ode; tspan=(tt[begin], tt[end]))
-    sol = solve(ode, Tsit5(); saveat=tt)
-    v = sol[ecm.v]
-    rmse_ecm = sqrt(mean(abs2, (v - v̄))) * 1e3
-
-    # GP-ECM
-    v = simulate_gp_rc(gp_model, df_test)
-    rmse_gpm = sqrt(mean(abs2, (v.μ - v̄))) * 1e3
-
-    return (; rmse_ecm, rmse_gpm)
-end
 
 function benchmark_sim(ecms, gpms, data)
     ids = sort_cell_ids(data)
-    sim = [simulation_error(ecms[id], gpms[id], data[id]) for id in ids]
-    rmse_ecm = sim .|> first
-    rmse_gpm = sim .|> last
-    DataFrame(; id=ids, rmse_ecm, rmse_gpm)
+    sim = simulation_voltage(ecms, gpms, data)
+
+    # rmse
+    map(ids) do id
+        (; δv_ecm, δv_gp, σv_gp) = sim[id]
+
+        rmse_ecm = sqrt(mean(abs2, δv_ecm))
+        rmse_gpm = sqrt(mean(abs2, δv_gp))
+
+        # q50_ecm = quantile(abs.(δv_ecm), 0.5)
+        # q50_gpm = quantile(abs.(δv_gp), 0.5)
+
+        q95_ecm = quantile(abs.(δv_ecm), 0.95)
+        q95_gpm = quantile(abs.(δv_gp), 0.95)
+
+        # q99_ecm = quantile(abs.(δv_ecm), 0.99)
+        # q99_gpm = quantile(abs.(δv_gp), 0.99)
+
+        max_ecm = maximum(abs.(δv_ecm[10:end])) # skip the first 10 min
+        max_gpm = maximum(abs.(δv_gp[10:end]))
+
+        q95_2σ = quantile(2σv_gp, 0.95)
+        max_2σ = maximum(2σv_gp)
+
+        (; rmse_ecm, rmse_gpm, q95_ecm, q95_gpm, max_ecm, max_gpm, q95_2σ, max_2σ)
+    end |> DataFrame
 end
