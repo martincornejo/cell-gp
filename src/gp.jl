@@ -139,7 +139,7 @@ function fit_gp_ecm(gp_model, θ0, df, tt)
 end
 
 function simulate_gp_rc(model, df)
-    (; gp, ode, rc, dt) = model
+    (; gp, ode, rc, dt, θ) = model
 
     tspan = (df[begin, "t"], df[end, "t"])
     ode = remake(ode; tspan)
@@ -149,7 +149,7 @@ function simulate_gp_rc(model, df)
     # 
     dfs = normalize_data(df, dt)
     x = GPPPInput(:v, RowVecs([dfs.ŝ dfs.î]))
-    y = gp(x)
+    y = gp(x, θ.noise)
     yμ = mean(y)
     yσ = sqrt.(var(y))
 
