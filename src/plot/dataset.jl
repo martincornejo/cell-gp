@@ -18,58 +18,65 @@ function plot_checkup_profile(df)
     fig
 end
 
-function plot_ocvs(data)
-    fig = Figure(size=(252, 350), fontsize=10, figure_padding=8)
-    gl = GridLayout(fig[1, 1])
+
+function plot_checkups(data)
+    fig = Figure(size=(512, 225), fontsize=10, figure_padding=5)
     colormap = :dense
     colorrange = (0.6, 1.0)
 
-    Colorbar(gl[1, 1]; colorrange, colormap, label="SOH / p.u.", vertical=false) #, flipaxis=false)
-    ax1 = Axis(gl[2, 1]; ylabel="OCV / V") # mean pOCV
-    ax2 = Axis(gl[3, 1]; xlabel="SOC / p.u.", ylabel="δOCV / mV")
+    gl1 = GridLayout(fig[1, 1])
+    ax11 = Axis(gl1[1, 1]; ylabel="OCV / V") # mean pOCV
+    ax12 = Axis(gl1[2, 1]; xlabel="SOC / p.u.", ylabel="ΔOCV / mV")
 
+    ax13 = Axis(fig[1, 1],
+        width=Relative(0.45),
+        height=Relative(0.32),
+        halign=0.9,
+        valign=0.6,
+    )
+    hidedecorations!(ax13)
+    ylims!(ax13, 3.9, 4.1)
+    xlims!(ax13, 0.7, 0.9)
+    # ax13.yticks = [3.9, 4.1]
+    # ax13.xticks = [0.7, 0.9]
+    lines!(ax11, [0.5, 0.7], [3.5, 3.9], color=(:black, 0.5), linestyle=:dot, strokewidth=1)
+    lines!(ax11, [0.9, 1.0], [3.9, 3.5], color=(:black, 0.5), linestyle=:dot, strokewidth=1)
+    poly!(ax11, Point2f[(0.7, 3.9), (0.9, 3.9), (0.9, 4.1), (0.7, 4.1)], color=:white, strokewidth=1, linestyle=:dash, strokecolor=(:black, 0.5))
+
+    ylims!(ax12, -120, 35)
+    rowsize!(gl1, 1, Auto(2))
+    rowsize!(gl1, 2, Auto(1))
+    hidexdecorations!(ax11, grid=false, ticks=false)
+    linkxaxes!(ax11, ax12)
+    rowgap!(gl1, 6)
+
+    gl2 = GridLayout(fig[1, 2])
+    ax21 = Axis(gl2[1, 1]; xlabel="SOC / p.u.", ylabel="Pulse resistance / mΩ")
+
+    Colorbar(fig[1, 3]; colorrange, colormap, label="SOH / p.u.") #, flipaxis=false)
 
     focv = fresh_focv()
-    s = 0:0.001:1.0
+    soc = 0:0.001:1.0
 
     for (id, df) in data
+        # soh
         soh = calc_capa_cccv(df) / 4.9
 
         # mean ocv
         pocv = calc_pocv(df)
-        lines!(ax1, s, pocv(s); color=soh, colorrange, colormap)
+        lines!(ax11, soc, pocv(soc); color=soh, colorrange, colormap)
+        lines!(ax13, soc, pocv(soc); color=soh, colorrange, colormap)
 
-        # degradation
+        # ocv degradation
         if id != :LGL13818
-            δv = (pocv(s) - focv(s)) * 1e3 # mV
-            lines!(ax2, s, δv; color=soh, colorrange, colormap)
+            Δv = (pocv(soc) - focv(soc)) * 1e3 # mV
+            lines!(ax12, soc, Δv; color=soh, colorrange, colormap)
         end
-    end
-    ylims!(ax2, -120, 35)
-    rowsize!(gl, 2, Auto(1.5))
-    rowsize!(gl, 3, Auto(1))
-    rowgap!(gl, 6)
-    linkxaxes!(ax1, ax2)
-    hidexdecorations!(ax1, grid=false, ticks=false)
-    return fig
-end
 
-function plot_rints(data; timestep=9.99)
-    fig = Figure(size=(252, 300), fontsize=10, figure_padding=8)
-    gl = GridLayout(fig[1, 1])
-    soc = 0.9:-0.1:0.1
-    colormap = :dense
-    colorrange = (0.6, 1.0)
-
-    Colorbar(gl[1, 1]; colorrange, colormap, label="SOH / p.u.", vertical=false)
-    ax = Axis(gl[2, 1]; xlabel="SOC / p.u.", ylabel="Pulse resistance / mΩ")
-    for (id, df) in data
-        soh = calc_capa_cccv(df) / 4.9
-        r = calc_rint(df; timestep) * 1e3 # mΩ
-
-        scatter!(ax, soc, r; color=soh, colorrange, colormap)
+        # r dc
+        r = calc_rint(df)
+        scatter!(ax21, r.soc, r.r; color=soh, colorrange, colormap)
     end
 
-    rowgap!(gl, 6)
     return fig
 end
