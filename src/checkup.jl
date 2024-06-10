@@ -108,10 +108,8 @@ function calc_pocv(df)
     return ocv
 end
 
-function fresh_focv()
-    file = "data/check-ups/2098LG_INR21700-M50L_SammyLGL13818NewFullCU.txt"
-    df = read_basytec(file)
-    return calc_pocv(df)
+function fresh_focv(data)
+    return calc_pocv(data[:LGL13818])
 end
 
 ## internal resistance
@@ -160,11 +158,10 @@ function summarize_checkups(data)
         df_rint[!, id] .= df_id.r
     end
     filter!(:soc => ==(0.5), df_rint)
-    select!(df_rint, Not(:soc))
-    rdc = df_rint |> Array |> vec
+    rdc = df_rint[:, ids] |> Array |> vec
 
     # ΔOCV MAE
-    focv = fresh_focv()
+    focv = fresh_focv(data)
     soc = 0:0.001:1.0
     ocv_mae = map(ids) do id
         pocv = calc_pocv(data[id])

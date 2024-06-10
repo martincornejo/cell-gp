@@ -50,7 +50,7 @@ end
 
 function benchmark_soh(ecms, gpms, data; v=(3.6, 3.8))
     v1, v2 = v
-    focv = fresh_focv()
+    focv = fresh_focv(data)
     invf = ConstantInterpolation((0:0.01:1) .* 4.9, focv(0:0.01:1))
     soh0 = invf(v2) - invf(v1)
 

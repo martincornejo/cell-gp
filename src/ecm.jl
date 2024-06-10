@@ -99,7 +99,7 @@ end
 
 function fit_ecm_series(data)
     tt = 0:(3*24*3600.0) # training time window
-    focv = fresh_focv()
+    focv = fresh_focv(data)
     res = Dict()
     Threads.@threads for id in collect(eachindex(data))
         df = data[id]

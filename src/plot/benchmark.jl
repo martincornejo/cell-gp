@@ -72,6 +72,10 @@ function plot_ocv_fit(ecms, gpms, data)
     fig = Figure(size=(512, 700), fontsize=10, figure_padding=5)
     gl = [GridLayout(fig[ci[2], ci[1]]) for ci in CartesianIndices((1:2, 1:5))]
 
+    # params
+    focv = fresh_focv(data)
+    s = 0:0.001:1
+
     ids = sort_cell_ids(data)
     for (i, id) in enumerate(ids)
         df = data[id]
@@ -89,9 +93,6 @@ function plot_ocv_fit(ecms, gpms, data)
 
         # parameters
         pocv = calc_pocv(df)
-        focv = fresh_focv()
-        s = 0:0.001:1
-
         cap_cu = calc_capa_cccv(df)
         cap_ecm = ecm.ode.p[1]
         soc0 = initial_soc(df)
@@ -227,7 +228,7 @@ function plot_rint_fit(ecms, gpms, data)
     # ablines!(ax, 0, 1.05, linestyle=:dashdot, color=:gray)
     # ablines!(ax, 0, 0.95, linestyle=:dashdot, color=:gray)
 
-    focv = fresh_focv()
+    focv = fresh_focv(data)
     socs = 0.3:0.1:0.7
     ids = sort_cell_ids(data)
 

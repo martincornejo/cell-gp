@@ -55,7 +55,7 @@ function plot_checkups(data)
 
     Colorbar(fig[1, 3]; colorrange, colormap, label="SOH / p.u.") #, flipaxis=false)
 
-    focv = fresh_focv()
+    focv = fresh_focv(data)
     soc = 0:0.001:1.0
 
     for (id, df) in data

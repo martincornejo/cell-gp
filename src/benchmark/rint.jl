@@ -44,7 +44,7 @@ function r2(y, f)
 end
 
 function benchmark_rdc(ecms, gpms, data)
-    focv = fresh_focv()
+    focv = fresh_focv(data)
     socs = 0.3:0.1:0.7
     ids = sort_cell_ids(data)
 
