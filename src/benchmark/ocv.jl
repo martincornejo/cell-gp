@@ -50,6 +50,6 @@ function benchmark_ocv(ecms, gpms, data)
         mae_gpm = mean(abs, δocv_gp) * 1e3
         max_gpm = maximum(abs, δocv_gp) * 1e3
 
-        (; id, mae_ecm, mae_gpm, max_ecm, max_gpm)
+        (; id, mae_ecm, max_ecm, mae_gpm, max_gpm)
     end |> DataFrame
 end

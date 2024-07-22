@@ -149,7 +149,7 @@ function summarize_checkups(data)
 
     # SOH
     cap = [calc_capa_cccv(data[id]) for id in ids]
-    soh = cap ./ 4.9
+    soh = cap ./ 4.8
 
     # RDC (50% SOC)
     df_rint = DataFrame(; soc=0.1:0.1:0.9)

@@ -40,15 +40,17 @@ ecms = fit_ecm_series(data)
 gpms = fit_gpm_series(data)
 
 # --- benchmark
+df_cu = summarize_checkups(data)
+
+df_sim = benchmark_sim(ecms, gpms, data)
 df_soh = benchmark_soh(ecms, gpms, data)
 df_ocv = benchmark_ocv(ecms, gpms, data)
 r2_rdc = benchmark_rdc(ecms, gpms, data)
-df_sim = benchmark_sim(ecms, gpms, data)
 
 # --- plot results
 fig1 = plot_checkup_profile(data[:LGL13818]) # fresh cell
 
-fig2 = plot_checkup(data)
+fig2 = plot_checkups(data)
 
 fig3 = plot_sim(ecms, gpms, data)
 

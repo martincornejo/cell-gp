@@ -43,8 +43,8 @@ function plot_sim(ecms, gpms, data)
         vlines!(axis, 72, color=:gray, linestyle=:dashdot)
     end
 
-    colormap = :dense
-    colorrange = (0.6, 1.0)
+    colormap = ColorSchemes.dense
+    linewidth = 1.2
 
     ids = sort_cell_ids(data)
     sim = simulation_voltage(ecms, gpms, data)
@@ -52,15 +52,16 @@ function plot_sim(ecms, gpms, data)
     for id in reverse(ids)
         # SOH
         df = data[id]
-        soh = calc_capa_cccv(df) / 4.9
+        soh = calc_capa_cccv(df) / 4.8
+        color = get(colormap, soh, (0.6, 1.0))
 
         # simulation results
         (; t, v̄, δv_ecm, δv_gp) = sim[id]
 
         # plot
-        lines!(ax[1], t / 3600, v̄; color=soh, colorrange, colormap)
-        lines!(ax[2], t / 3600, δv_ecm; color=soh, colorrange, colormap)
-        lines!(ax[3], t / 3600, δv_gp; color=soh, colorrange, colormap)
+        lines!(ax[1], t / 3600, v̄; color, linewidth)
+        lines!(ax[2], t / 3600, δv_ecm; color, linewidth)
+        lines!(ax[3], t / 3600, δv_gp; color, linewidth)
     end
 
     linkxaxes!(ax...)
@@ -148,9 +149,10 @@ function plot_ocv_fit(ecms, gpms, data)
         end
 
         # text box
-        soh = round(cap_cu / 4.85 * 100; digits=1)
+        soh = round(cap_cu / 4.8 * 100; digits=1)
+        soh = soh > 100 ? 100 : soh
         text = "Cell $i \nSOH: $soh %"
-        poly!(ax1, Rect(0.1, 3.95, 1.5, 0.29), color=:white, strokecolor=:black, strokewidth=1)
+        poly!(ax1, Rect(0.1, 3.95, 1.45, 0.29), color=:white, strokecolor=:black, strokewidth=1)
         text!(ax1, 0.15, 4.2; text, font=:bold, align=(:left, :top))
 
         linkxaxes!(ax1, ax2)
@@ -181,7 +183,7 @@ function plot_gp_rint(gpms, data)
 
         soc0 = initial_soc(df)
         cap = calc_capa_cccv(df)
-        soh = cap / 4.9
+        soh = cap / 4.8
         color = get(colormap, soh, (0.6, 1.0))
 
         # R0

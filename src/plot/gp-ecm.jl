@@ -15,8 +15,8 @@ function plot_gp_ecm(df, gp_model)
     # model
     focv = calc_pocv(df)
     cap = calc_capa_cccv(df)
-    soh = cap / 4.9
-    @unpack gp, dt = gp_model
+    soh = cap / 4.8
+    (; gp, dt, θ) = gp_model
 
     # OCV
     s = 0:0.01:1
@@ -39,12 +39,6 @@ function plot_gp_ecm(df, gp_model)
     lines!(ax1, s, ocv_meas)
     band!(ax1, s, ocvμ - 2ocvσ, ocvμ + 2ocvσ)
 
-    vl = [((extrema(df_train.s) ./ cap) .+ soc0)...]
-    vlines!(ax1, vl, color=(:black, 0.5), linestyle=:dash)
-
-    # s̄ = (df_train.s ./ cap) .+ soc0
-    # scatter!(s̄, df_train.v; color=abs.(df_train.i), alpha=0.01)
-
     # R
     x = GPPPInput(:r, data)
     r0 = 1e3 * dt.σ.scale[1] / dt.i.scale[1] # scale to mΩ
@@ -57,11 +51,22 @@ function plot_gp_ecm(df, gp_model)
     ax2.xlabel = "SOC (p.u.)"
     ax2.ylabel = "R (mΩ)"
     xlims!(ax2, (0, 1))
-    ylims!(ax2, (60, 120))
-    # ylims!(ax2, (0.0, 80))
+    # ylims!(ax2, (60, 120))
+    ylims!(ax2, (10, 115))
     lines!(ax2, s, rμ; color=soh, colorrange, colormap=colormap)
     band!(ax2, s, rμ - 2rσ, rμ + 2rσ)
-    vlines!(ax2, vl, color=(:black, 0.5), linestyle=:dash)
+
+    # vlines
+    smin, smax = extrema(df_train.s) ./ cap .+ soc0
+    vlines!(ax1, [smin, smax], color=:gray, linestyle=:dashdot)
+    vlines!(ax2, [smin, smax], color=:gray, linestyle=:dashdot)
+
+    ax1.title = "θocv: $(θ.kernel.ocv.σ)"
+
+    # 
+    vx = dt.v.mean[1]
+    sx = dt.s.mean[1] / cap + soc0
+    scatter!(ax1, sx, vx)
 
     return fig
 end

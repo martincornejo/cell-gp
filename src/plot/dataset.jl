@@ -3,9 +3,10 @@ function plot_checkup_profile(df)
     gl = GridLayout(fig[1, 1])
     ax1 = Axis(gl[1, 1]; ylabel="Voltage / V")
     ax2 = Axis(gl[2, 1]; ylabel="Current / A", xlabel="Time / h")
+    linewidth = 1.2
 
-    lines!(ax1, df[:, "Time[h]"], df[:, "U[V]"], color=Cycled(1))
-    lines!(ax2, df[:, "Time[h]"], df[:, "I[A]"], color=Cycled(2))
+    lines!(ax1, df[:, "Time[h]"], df[:, "U[V]"]; color=Cycled(1), linewidth)
+    lines!(ax2, df[:, "Time[h]"], df[:, "I[A]"]; color=Cycled(2), linewidth)
     xlims!(ax1, (df[begin, "Time[h]"], df[end, "Time[h]"]))
     xlims!(ax2, (df[begin, "Time[h]"], df[end, "Time[h]"]))
 
@@ -21,8 +22,7 @@ end
 
 function plot_checkups(data)
     fig = Figure(size=(512, 225), fontsize=10, figure_padding=5)
-    colormap = :dense
-    colorrange = (0.6, 1.0)
+    colormap = ColorSchemes.dense
 
     gl1 = GridLayout(fig[1, 1])
     ax11 = Axis(gl1[1, 1]; ylabel="OCV / V") # mean pOCV
@@ -60,22 +60,23 @@ function plot_checkups(data)
 
     for (id, df) in data
         # soh
-        soh = calc_capa_cccv(df) / 4.9
+        soh = calc_capa_cccv(df) / 4.8
+        color = get(colormap, soh, (0.6, 1.0))
 
         # mean ocv
         pocv = calc_pocv(df)
-        lines!(ax11, soc, pocv(soc); color=soh, colorrange, colormap)
-        lines!(ax13, soc, pocv(soc); color=soh, colorrange, colormap)
+        lines!(ax11, soc, pocv(soc); color)
+        lines!(ax13, soc, pocv(soc); color)
 
         # ocv degradation
         if id != :LGL13818
             Δv = (pocv(soc) - focv(soc)) * 1e3 # mV
-            lines!(ax12, soc, Δv; color=soh, colorrange, colormap)
+            lines!(ax12, soc, Δv; color)
         end
 
         # r dc
         r = calc_rint(df)
-        scatter!(ax21, r.soc, r.r; color=soh, colorrange, colormap)
+        scatter!(ax21, r.soc, r.r; color)
     end
 
     return fig
