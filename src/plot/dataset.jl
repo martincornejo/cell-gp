@@ -23,6 +23,7 @@ end
 function plot_checkups(data)
     fig = Figure(size=(512, 225), fontsize=10, figure_padding=5)
     colormap = ColorSchemes.dense
+    colorrange = (0.6, 1.0)
 
     gl1 = GridLayout(fig[1, 1])
     ax11 = Axis(gl1[1, 1]; ylabel="OCV / V") # mean pOCV
@@ -61,7 +62,7 @@ function plot_checkups(data)
     for (id, df) in data
         # soh
         soh = calc_capa_cccv(df) / 4.8
-        color = get(colormap, soh, (0.6, 1.0))
+        color = get(colormap, soh, colorrange)
 
         # mean ocv
         pocv = calc_pocv(df)

@@ -44,6 +44,7 @@ function plot_sim(ecms, gpms, data)
     end
 
     colormap = ColorSchemes.dense
+    colorrange = (0.6, 1.0)
     linewidth = 1.2
 
     ids = sort_cell_ids(data)
@@ -53,7 +54,7 @@ function plot_sim(ecms, gpms, data)
         # SOH
         df = data[id]
         soh = calc_capa_cccv(df) / 4.8
-        color = get(colormap, soh, (0.6, 1.0))
+        color = get(colormap, soh, colorrange)
 
         # simulation results
         (; t, v̄, δv_ecm, δv_gp) = sim[id]
@@ -106,7 +107,7 @@ function plot_ocv_fit(ecms, gpms, data)
         # GP-ECM
         (; gp, dt) = gpm
         q_gp = 0:0.005:5
-        ŝ = StatsBase.transform(dt.s, q_gp .- soc0 * cap_cu)
+        ŝ = StatsBase.transform(dt.q, q_gp .- soc0 * cap_cu)
         x = GPPPInput(:ocv, RowVecs([ŝ zero.(ŝ)]))
         ocv_gp = gp(x)
         μ = StatsBase.reconstruct(dt.v, mean(ocv_gp))
@@ -124,8 +125,8 @@ function plot_ocv_fit(ecms, gpms, data)
         profile = load_profile(df)
         df_train = sample_dataset(profile, tt)
 
-        hst = hist!(ax2, df_train.s .+ soc0 * cap_cu, color=(:gray, 0.3), label="SOC")
-        smin, smax = extrema(df_train.s) .+ soc0 * cap_cu
+        hst = hist!(ax2, df_train.q .+ soc0 * cap_cu, color=(:gray, 0.3), label="SOC")
+        smin, smax = extrema(df_train.q) .+ soc0 * cap_cu
         vlines!(ax1, [smin, smax], color=:gray, linestyle=:dashdot)
         hidedecorations!(ax2)
         hidespines!(ax2)
@@ -188,7 +189,7 @@ function plot_gp_rint(gpms, data)
 
         # R0
         s = 0.2:0.01:0.75
-        ŝ = StatsBase.transform(dt.s, (s .- soc0) * cap)
+        ŝ = StatsBase.transform(dt.q, (s .- soc0) * cap)
         i = zeros(size(s))
         x = GPPPInput(:r, RowVecs([ŝ i]))
         r0 = 1e3 * dt.σ.scale[1] / dt.i.scale[1] # scale to mΩ

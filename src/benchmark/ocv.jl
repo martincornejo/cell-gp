@@ -15,7 +15,7 @@ function benchmark_ocv(ecms, gpms, data)
         # soc bounds
         profile = load_profile(df)
         df_train = sample_dataset(profile, tt)
-        qmin, qmax = extrema(df_train.s) # charge
+        qmin, qmax = extrema(df_train.q) # charge
 
         # capa / soh range
         cap = calc_capa_cccv(df)
@@ -29,7 +29,7 @@ function benchmark_ocv(ecms, gpms, data)
 
         # gp
         (; gp, dt) = gpm
-        ŝ = StatsBase.transform(dt.s, q)
+        ŝ = StatsBase.transform(dt.q, q)
         i = zero.(ŝ)
         x = GPPPInput(:ocv, RowVecs([ŝ i]))
         ocv_gp = gp(x)

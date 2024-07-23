@@ -23,7 +23,7 @@ function simulate_pulse_resistance_gpm(model, df; i=1.6166, soc=0.5, Δt=9.99)
     cap = calc_capa_cccv(df)
     soc0 = initial_soc(df)
     c = cap * (soc - soc0)
-    ĉ = StatsBase.transform(dt.s, [c])
+    ĉ = StatsBase.transform(dt.q, [c])
     x = GPPPInput(:r, RowVecs([ĉ zero.(ĉ)]))
     r = gp(x)
     rμ = mean(r) |> first

@@ -201,10 +201,10 @@ function load_profile(df)
     # interpolation functions
     i = ConstantInterpolation(df[:, "I[A]"] .+ ibias, df.t)
     v = ConstantInterpolation(df[:, "U[V]"], df.t)
-    s = ConstantInterpolation(df[:, "Ah-Step"], df.t)
+    q = ConstantInterpolation(df[:, "Ah-Step"], df.t)
     T = ConstantInterpolation(df[:, "T1[°C]"], df.t)
 
-    return (; i, s, v, T)
+    return (; i, q, v, T)
 end
 
 function sample_dataset(data, tt)
@@ -212,7 +212,7 @@ function sample_dataset(data, tt)
         :t => tt,
         :i => data.i(tt),
         :v => data.v(tt),
-        :s => data.s(tt),
+        :q => data.q(tt),
         :T => data.T(tt)
     )
 end

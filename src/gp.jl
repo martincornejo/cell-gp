@@ -4,17 +4,17 @@ function fit_zscore(df)
     v = StatsBase.fit(ZScoreTransform, df.v)
     σ = StatsBase.fit(ZScoreTransform, df.v, center=false)
     i = StatsBase.fit(ZScoreTransform, df.i, center=false)
-    s = StatsBase.fit(ZScoreTransform, df.s)
+    q = StatsBase.fit(ZScoreTransform, df.q)
     T = StatsBase.fit(ZScoreTransform, df.T)
-    return (; v, σ, i, s, T)
+    return (; v, σ, i, q, T)
 end
 
 function normalize_data(df, dt)
     v̂ = StatsBase.transform(dt.v, df.v)
     î = StatsBase.transform(dt.i, df.i)
-    ŝ = StatsBase.transform(dt.s, df.s)
+    q̂ = StatsBase.transform(dt.q, df.q)
     T̂ = StatsBase.transform(dt.T, df.T)
-    return DataFrame(; df.t, v̂, î, ŝ, T̂)
+    return DataFrame(; df.t, v̂, î, q̂, T̂)
 end
 
 ## GP-ECM model
@@ -81,7 +81,7 @@ function build_nlml(rc_model, gp_model, x, v̂, t, dt)
 end
 
 function fit_gp_ecm_params(rc_model, gp_model, θ0, df, dt)
-    x = GPPPInput(:v, RowVecs([df.ŝ df.î]))
+    x = GPPPInput(:v, RowVecs([df.q̂ df.î]))
 
     loss = build_nlml(rc_model, gp_model, x, df.v̂, df.t, dt)
     p0 = ComponentArray((;
@@ -127,7 +127,7 @@ function fit_gp_ecm(gp_model, θ0, df, tt)
     df_train[!, :v] = df_train.v - vrc
     dfn = normalize_data(df_train, dt)
 
-    x = GPPPInput(:v, RowVecs([dfn.ŝ dfn.î]))
+    x = GPPPInput(:v, RowVecs([dfn.q̂ dfn.î]))
     v̂ = dfn.v̂
 
     θ = softplus.(u.gp)
@@ -148,7 +148,7 @@ function simulate_gp_rc(model, df)
 
     # 
     dfs = normalize_data(df, dt)
-    x = GPPPInput(:v, RowVecs([dfs.ŝ dfs.î]))
+    x = GPPPInput(:v, RowVecs([dfs.q̂ dfs.î]))
     y = gp(x, θ.noise)
     yμ = mean(y)
     yσ = sqrt.(var(y))

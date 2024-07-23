@@ -20,7 +20,7 @@ function plot_gp_ecm(df, gp_model)
 
     # OCV
     s = 0:0.01:1
-    ŝ = StatsBase.transform(dt.s, (s .- soc0) * cap)
+    ŝ = StatsBase.transform(dt.q, (s .- soc0) * cap)
     i = zeros(size(s))
     data = RowVecs([ŝ i])
     x = GPPPInput(:ocv, data)
@@ -57,7 +57,7 @@ function plot_gp_ecm(df, gp_model)
     band!(ax2, s, rμ - 2rσ, rμ + 2rσ)
 
     # vlines
-    smin, smax = extrema(df_train.s) ./ cap .+ soc0
+    smin, smax = extrema(df_train.q) ./ cap .+ soc0
     vlines!(ax1, [smin, smax], color=:gray, linestyle=:dashdot)
     vlines!(ax2, [smin, smax], color=:gray, linestyle=:dashdot)
 
@@ -65,7 +65,7 @@ function plot_gp_ecm(df, gp_model)
 
     # 
     vx = dt.v.mean[1]
-    sx = dt.s.mean[1] / cap + soc0
+    sx = dt.q.mean[1] / cap + soc0
     scatter!(ax1, sx, vx)
 
     return fig

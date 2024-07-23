@@ -36,7 +36,7 @@ function benchmark_soh(ecms, gpms, data; v=(3.6, 3.9))
 
         # gp
         (; gp, dt) = gpm
-        ŝ = StatsBase.transform(dt.s, q)
+        ŝ = StatsBase.transform(dt.q, q)
         i = zero.(ŝ)
         x = GPPPInput(:ocv, RowVecs([ŝ i]))
         ocv_gp = gp(x)
