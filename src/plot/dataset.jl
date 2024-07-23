@@ -1,5 +1,5 @@
 function plot_checkup_profile(df)
-    fig = Figure(size=(516, 180), fontsize=10, figure_padding=5)
+    fig = Figure(size=(516, 192), fontsize=10, figure_padding=5)
     gl = GridLayout(fig[1, 1])
     ax1 = Axis(gl[1, 1]; ylabel="Voltage / V")
     ax2 = Axis(gl[2, 1]; ylabel="Current / A", xlabel="Time / h")
@@ -16,6 +16,13 @@ function plot_checkup_profile(df)
 
     hidexdecorations!(ax1, grid=false, ticks=false)
     rowgap!(gl, 5)
+
+    Label(gl[1, 1, TopLeft()], "(1)", fontsize=10, font=:bold, color=:gray, halign=:right, padding=(0, -15, 5, 0))
+    Label(gl[1, 1, TopLeft()], "(2)", fontsize=10, font=:bold, color=:gray, halign=:right, padding=(0, -35, 5, 0))
+    Label(gl[1, 1, TopLeft()], "(3)", fontsize=10, font=:bold, color=:gray, halign=:right, padding=(0, -142, 5, 0))
+    Label(gl[1, 1, TopLeft()], "(4)", fontsize=10, font=:bold, color=:gray, halign=:right, padding=(0, -430, 5, 0))
+    Label(gl[1, 1, TopLeft()], "(5)", fontsize=10, font=:bold, color=:gray, halign=:right, padding=(0, -452, 5, 0))
+
     fig
 end
 
@@ -79,6 +86,10 @@ function plot_checkups(data)
         r = calc_rint(df)
         scatter!(ax21, r.soc, r.r; color)
     end
+
+    Label(gl1[1, 1, TopLeft()], "a)", fontsize=12, font=:bold, padding=(0, 5, 5, 0), halign=:right)
+    Label(gl1[2, 1, BottomLeft()], "b)", fontsize=12, font=:bold, padding=(0, 5, 2, 0), halign=:right, valign=:bottom)
+    Label(gl2[1, 1, TopLeft()], "c)", fontsize=12, font=:bold, padding=(0, 5, 5, 0), halign=:right)
 
     return fig
 end

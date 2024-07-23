@@ -67,6 +67,11 @@ function plot_sim(ecms, gpms, data)
 
     linkxaxes!(ax...)
     Colorbar(fig[:, 2]; colorrange, colormap, label="SOH / p.u.")
+
+    Label(gl[1, 1, TopLeft()], "a)", fontsize=10, font=:bold, halign=:right, padding=(0, -10, 5, 0))
+    Label(gl[2, 1, TopLeft()], "b)", fontsize=10, font=:bold, halign=:right, padding=(0, -10, 5, 0))
+    Label(gl[3, 1, TopLeft()], "c)", fontsize=10, font=:bold, halign=:right, padding=(0, -10, 5, 0))
+
     return fig
 end
 
