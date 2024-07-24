@@ -181,6 +181,8 @@ function fit_gpm_series(data)
         catch e
             if isa(e, PosDefException)
                 @warn "$id encountered a numerical instability while fitting. The model will be ommited."
+            else
+                throw(e)
             end
         end
     end
