@@ -76,7 +76,7 @@ function plot_sim(ecms, gpms, data)
 end
 
 function plot_ocv_fit(ecms, gpms, data)
-    fig = Figure(size=(512, 700), fontsize=10, figure_padding=5)
+    fig = Figure(size=(512, 670), fontsize=10, figure_padding=5)
     gl = [GridLayout(fig[ci[2], ci[1]]) for ci in CartesianIndices((1:2, 1:5))]
 
     # params
