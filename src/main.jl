@@ -32,7 +32,7 @@ include("plot/dataset.jl")
 include("plot/benchmark.jl")
 
 # --- data
-files = readdir("data/check-ups/", join=true)
+files = readdir("data/", join=true)
 data = load_data(files)
 
 # --- fit models
@@ -48,7 +48,7 @@ df_ocv = benchmark_ocv(ecms, gpms, data)
 r2_rdc = benchmark_rdc(ecms, gpms, data)
 
 # --- plot results
-fig1 = plot_checkup_profile(data[:LGL13818]) # fresh cell
+fig1 = plot_checkup_profile(data[:Cell1]) # fresh cell
 
 fig2 = plot_checkups(data)
 

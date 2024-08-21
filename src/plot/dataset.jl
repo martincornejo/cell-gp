@@ -77,7 +77,7 @@ function plot_checkups(data)
         lines!(ax13, soc, pocv(soc); color)
 
         # ocv degradation
-        if id != :LGL13818
+        if id != :Cell1
             Δv = (pocv(soc) - focv(soc)) * 1e3 # mV
             lines!(ax12, soc, Δv; color)
         end

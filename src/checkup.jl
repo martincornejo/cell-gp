@@ -21,7 +21,7 @@ function read_basytec(file; kwargs...)
 end
 
 function get_cell_id(file)
-    pattern = r"(MF\d+|LGL\d+)"
+    pattern = r"(Cell\d+)"
     match_result = match(pattern, file)
     return match_result |> first
 end
@@ -109,7 +109,7 @@ function calc_pocv(df)
 end
 
 function fresh_focv(data)
-    return calc_pocv(data[:LGL13818])
+    return calc_pocv(data[:Cell1])
 end
 
 ## internal resistance
