@@ -1,8 +1,7 @@
 function plot_checkup_profile(df)
     fig = Figure(size=(516, 192), fontsize=10, figure_padding=5)
-    gl = GridLayout(fig[1, 1])
-    ax1 = Axis(gl[1, 1]; ylabel="Voltage / V")
-    ax2 = Axis(gl[2, 1]; ylabel="Current / A", xlabel="Time / h")
+    ax1 = Axis(fig[1, 1]; ylabel="Voltage / V")
+    ax2 = Axis(fig[2, 1]; ylabel="Current / A", xlabel="Time / h")
     linewidth = 1.2
 
     lines!(ax1, df[:, "Time[h]"], df[:, "U[V]"]; color=Cycled(1), linewidth)
@@ -15,13 +14,13 @@ function plot_checkup_profile(df)
     vlines!(ax2, df[idx, "Time[h]"], color=:gray, linestyle=:dashdot)
 
     hidexdecorations!(ax1, grid=false, ticks=false)
-    rowgap!(gl, 5)
+    rowgap!(fig.layout, 5)
 
-    Label(gl[1, 1, TopLeft()], "(1)", fontsize=10, font=:bold, color=:gray, halign=:right, padding=(0, -15, 5, 0))
-    Label(gl[1, 1, TopLeft()], "(2)", fontsize=10, font=:bold, color=:gray, halign=:right, padding=(0, -35, 5, 0))
-    Label(gl[1, 1, TopLeft()], "(3)", fontsize=10, font=:bold, color=:gray, halign=:right, padding=(0, -142, 5, 0))
-    Label(gl[1, 1, TopLeft()], "(4)", fontsize=10, font=:bold, color=:gray, halign=:right, padding=(0, -430, 5, 0))
-    Label(gl[1, 1, TopLeft()], "(5)", fontsize=10, font=:bold, color=:gray, halign=:right, padding=(0, -452, 5, 0))
+    Label(fig[1, 1, TopLeft()], "(1)", fontsize=10, font=:bold, color=:gray, halign=:right, padding=(0, -15, 5, 0))
+    Label(fig[1, 1, TopLeft()], "(2)", fontsize=10, font=:bold, color=:gray, halign=:right, padding=(0, -35, 5, 0))
+    Label(fig[1, 1, TopLeft()], "(3)", fontsize=10, font=:bold, color=:gray, halign=:right, padding=(0, -142, 5, 0))
+    Label(fig[1, 1, TopLeft()], "(4)", fontsize=10, font=:bold, color=:gray, halign=:right, padding=(0, -430, 5, 0))
+    Label(fig[1, 1, TopLeft()], "(5)", fontsize=10, font=:bold, color=:gray, halign=:right, padding=(0, -452, 5, 0))
 
     fig
 end

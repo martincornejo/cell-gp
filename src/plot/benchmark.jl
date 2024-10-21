@@ -1,8 +1,7 @@
 function plot_sim(ecms, gpms, data)
     fig = Figure(size=(512, 250), fontsize=10, figure_padding=5)
-    gl = GridLayout(fig[1, 1])
-    ax = [Axis(gl[i, 1]) for i in 1:3]
-    rowgap!(gl, 5)
+    ax = [Axis(fig[i, 1]) for i in 1:3]
+    rowgap!(fig.layout, 5)
     ax[1].title = "Measured"
     ax[2].title = "Error ECM"
     ax[3].title = "Error GP-ECM"
@@ -68,9 +67,9 @@ function plot_sim(ecms, gpms, data)
     linkxaxes!(ax...)
     Colorbar(fig[:, 2]; colorrange, colormap, label="SOH / p.u.")
 
-    Label(gl[1, 1, TopLeft()], "a)", fontsize=10, font=:bold, halign=:right, padding=(0, -10, 5, 0))
-    Label(gl[2, 1, TopLeft()], "b)", fontsize=10, font=:bold, halign=:right, padding=(0, -10, 5, 0))
-    Label(gl[3, 1, TopLeft()], "c)", fontsize=10, font=:bold, halign=:right, padding=(0, -10, 5, 0))
+    Label(fig[1, 1, TopLeft()], "a)", fontsize=10, font=:bold, halign=:right, padding=(0, -10, 5, 0))
+    Label(fig[2, 1, TopLeft()], "b)", fontsize=10, font=:bold, halign=:right, padding=(0, -10, 5, 0))
+    Label(fig[3, 1, TopLeft()], "c)", fontsize=10, font=:bold, halign=:right, padding=(0, -10, 5, 0))
 
     return fig
 end
@@ -157,25 +156,23 @@ function plot_ocv_fit(ecms, gpms, data)
         # text box
         soh = round(cap_cu / 4.8 * 100; digits=1)
         soh = soh > 100 ? 100 : soh
-        text = "Cell $i \nSOH: $soh %"
-        poly!(ax1, Rect(0.1, 3.95, 1.45, 0.29), color=:white, strokecolor=:black, strokewidth=1)
-        text!(ax1, 0.15, 4.2; text, font=:bold, align=(:left, :top))
+        text = "Cell $i - SOH: $soh %"
+        ax1.title = text
 
         linkxaxes!(ax1, ax2)
     end
-
+    rowgap!(fig.layout, 4)
     fig
 end
 
 function plot_gp_rint(gpms, data)
     fig = Figure(size=(252, 252), fontsize=10, figure_padding=7)
-    gl = GridLayout(fig[1, 1])
 
     colormap = ColorSchemes.dense
     colorrange = (0.6, 1.0)
-    Colorbar(gl[1, 1]; vertical=false, colorrange, colormap, label="SOH / p.u.")
+    Colorbar(fig[1, 1]; vertical=false, colorrange, colormap, label="SOH / p.u.")
 
-    ax = Axis(gl[2, 1])
+    ax = Axis(fig[2, 1])
     ax.xlabel = "SOC / p.u."
     ax.ylabel = "R₀ / mΩ"
     xlims!(ax, (0.2, 0.75))
@@ -207,24 +204,23 @@ function plot_gp_rint(gpms, data)
         band!(ax, s, rμ - 2rσ, rμ + 2rσ; color=(color, 0.5))
     end
 
-    rowgap!(gl, 5)
+    rowgap!(fig.layout, 5)
     return fig
 end
 
 function plot_rint_fit(ecms, gpms, data)
     fig = Figure(size=(252, 280), fontsize=10, figure_padding=7)
-    gl = GridLayout(fig[1, 1])
 
     ## colorbars
     cmap_ecm = ColorSchemes.Blues
     cmap_gpm = ColorSchemes.Oranges
     colorrange = (0.0, 1.0)
 
-    Colorbar(gl[1, 1]; vertical=false, colorrange, colormap=cmap_ecm, label="SOC / p.u.")
-    Colorbar(gl[2, 1]; vertical=false, colorrange, colormap=cmap_gpm, ticksvisible=false, ticklabelsvisible=false)
+    Colorbar(fig[1, 1]; vertical=false, colorrange, colormap=cmap_ecm, label="SOC / p.u.")
+    Colorbar(fig[2, 1]; vertical=false, colorrange, colormap=cmap_gpm, ticksvisible=false, ticklabelsvisible=false)
 
     ## scatter
-    ax = Axis(gl[3, 1],
+    ax = Axis(fig[3, 1],
         xlabel="Measured pulse resistance / mΩ",
         ylabel="Estimated pulse resistance / mΩ"
     )
@@ -286,6 +282,6 @@ function plot_rint_fit(ecms, gpms, data)
         end
     end
 
-    rowgap!(gl, 5)
+    rowgap!(fig.layout, 5)
     fig
 end
