@@ -207,13 +207,13 @@ function load_profile(df)
     return (; i, q, v, T)
 end
 
-function sample_dataset(data, tt)
+function sample_dataset(profile, tt)
     return DataFrame(
         :t => tt,
-        :i => data.i(tt),
-        :v => data.v(tt),
-        :q => data.q(tt),
-        :T => data.T(tt)
+        :i => profile.i(tt),
+        :v => profile.v(tt),
+        :q => profile.q(tt),
+        :T => profile.T(tt)
     )
 end
 
