@@ -74,14 +74,13 @@ function fit_ecm(df, tt, focv)
 
     # optimize with multiple initial values, select best fit
     solutions = []
-    for Q in 3.6:0.4:4.8
+    for Q in 3.6:0.2:4.8
         # update initial guess of Q
         p0.p[1] = Q
         opt = remake(opt; u0=p0)
 
         # solve
-        alg = LBFGS(linesearch=BackTracking())
-        sol = solve(opt, alg; reltol=1e-4)
+        sol = solve(opt, LBFGS(); reltol=1e-4)
         if sol.retcode == ReturnCode.Success
             push!(solutions, sol)
         end

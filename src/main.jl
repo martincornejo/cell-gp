@@ -5,11 +5,11 @@ using StatsBase
 using LinearAlgebra
 
 using ModelingToolkit
-using DifferentialEquations
+using OrdinaryDiffEq
 
 using Optimization
 using OptimizationOptimJL
-import Optim
+using LineSearches
 import ComponentArrays: ComponentArray
 
 using Stheno

@@ -46,8 +46,8 @@ function plot_checkups(data)
     xlims!(ax13, 0.7, 0.9)
     # ax13.yticks = [3.9, 4.1]
     # ax13.xticks = [0.7, 0.9]
-    lines!(ax11, [0.5, 0.7], [3.5, 3.9], color=(:black, 0.5), linestyle=:dot, strokewidth=1)
-    lines!(ax11, [0.9, 1.0], [3.9, 3.5], color=(:black, 0.5), linestyle=:dot, strokewidth=1)
+    lines!(ax11, [0.5, 0.7], [3.5, 3.9], color=(:black, 0.5), linestyle=:dot, linewidth=1)
+    lines!(ax11, [0.9, 1.0], [3.9, 3.5], color=(:black, 0.5), linestyle=:dot, linewidth=1)
     poly!(ax11, Point2f[(0.7, 3.9), (0.9, 3.9), (0.9, 4.1), (0.7, 4.1)], color=:white, strokewidth=1, linestyle=:dash, strokecolor=(:black, 0.5))
 
     ylims!(ax12, -120, 35)
