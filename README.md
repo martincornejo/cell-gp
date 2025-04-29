@@ -1,5 +1,5 @@
 # Data-driven model enhancement of late-life lithium-ion batteries
-Accompanying code to the paper *Data-driven model parametrization of late-life lithium-ion batteries*.
+Accompanying code to the paper *Data-driven model enhancement of late-life lithium-ion batteries*: [https://doi.org/10.1016/j.fub.2025.100060](https://doi.org/10.1016/j.fub.2025.100060)
 
 ## Dataset
 To get started, you will need to download the dataset used in this research. You can download the dataset from the following link:
